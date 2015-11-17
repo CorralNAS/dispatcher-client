@@ -74,9 +74,9 @@ export class ShellClient
     connect(command)
     {
         /* Request shell connection */
-        self.client.call("shell.spawn", [command], result => {
+        this.client.call("shell.spawn", [command], result => {
             this.token = result;
-            this.socket = new WebSocket(`http://${this.client.hostname}:5000/shell`);
+            this.socket = new WebSocket(`ws://${this.client.hostname}:5000/shell`);
             this.socket.onopen = this.__onopen.bind(this);
             this.socket.onmessage = this.__onmessage.bind(this);
             this.socket.onclose = this.__onclose.bind(this);

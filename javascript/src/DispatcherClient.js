@@ -195,10 +195,6 @@ export class DispatcherClient
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
-
-        if (this.keepaliveInterval) {
-            this.keepaliveTimer = setTimeout(this.ping, this.keepaliveInterval);
-        }
     }
 
     disconnect()
@@ -223,7 +219,7 @@ export class DispatcherClient
 
     ping()
     {
-        this.call("management.ping");
+        this.call("management.ping", [], () => {});
     }
 
     login(username, password)
@@ -236,6 +232,10 @@ export class DispatcherClient
 
         this.pendingCalls.set(id, {
             "callback": (result) => {
+                if (this.keepaliveInterval) {
+                    this.keepaliveTimer = setTimeout(this.ping.bind(this), this.keepaliveInterval);
+                }
+
                 this.token = result;
                 this.onLogin(result);
             }

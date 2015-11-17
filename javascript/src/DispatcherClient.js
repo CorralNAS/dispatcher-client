@@ -86,7 +86,7 @@ export class DispatcherClient
 
         if (data.namespace == "events" && data.name == "event") {
             if (this.eventHandlers.has(data.args.name)) {
-                for (let e of this.eventHandlers.values()) {
+                for (let e of this.eventHandlers.get(data.args.name).values()) {
                     e(data.args.args);
                 }
             }

@@ -57,6 +57,10 @@ export class DispatcherClient
         this.defaultTimeout = 20;
         this.hostname = hostname;
         this.socket = null;
+        this.reconnectInterval = null;
+        this.reconnectTimer = null;
+        this.keepaliveInterval = 60;
+        this.keepaliveTimer = null;
         this.pendingCalls = new Map();
         this.eventHandlers = new Map();
         this.subscriptions = new Map();
@@ -186,11 +190,40 @@ export class DispatcherClient
         this.socket.onmessage = this.__onmessage.bind(this);
         this.socket.onopen = this.__onopen.bind(this);
         this.socket.onclose = this.__onclose.bind(this);
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        if (this.keepaliveInterval) {
+            this.keepaliveTimer = setTimeout(this.ping, this.keepaliveInterval);
+        }
     }
 
     disconnect()
     {
+        if (this.reconnectInterval) {
+            this.reconnectTimer = setTimeout(
+                () => {
+                    this.connect();
+                    this.login_token(this.token);
+                },
+                this.reconnectInterval
+            );
+        }
+
+        if (this.keepaliveTimer) {
+            clearTimeout(this.keepaliveTimer);
+            this.keepaliveTimer = null;
+        }
+
         this.socket.close();
+    }
+
+    ping()
+    {
+        this.call("management.ping");
     }
 
     login(username, password)
@@ -202,10 +235,25 @@ export class DispatcherClient
         };
 
         this.pendingCalls.set(id, {
-            "callback": () => this.onLogin()
+            "callback": (result) => {
+                this.token = result;
+                this.onLogin(result);
+            }
         });
 
         this.socket.send(DispatcherClient.__pack("rpc", "auth", payload, id));
+    }
+
+    login_token(token)
+    {
+        let id = DispatcherClient.__uuid();
+        let payload = {"token": token};
+
+        this.pendingCalls.set(id, {
+            "callback": (result) => this.onLogin(result)
+        });
+
+        this.socket.send(DispatcherClient.__pack("rpc", "auth_token", payload, id));
     }
 
     call(method, args, callback)

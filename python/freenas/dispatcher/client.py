@@ -231,7 +231,7 @@ class Client(object):
 
     def drop_pending_calls(self):
         message = "Connection closed"
-        for key, call in self.pending_calls.items():
+        for key, call in list(self.pending_calls.items()):
             call.result = None
             call.error = {
                 "code":  errno.ECONNABORTED,

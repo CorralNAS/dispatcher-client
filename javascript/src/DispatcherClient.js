@@ -36,7 +36,7 @@ const OTHER = 8;
 
 import { getErrno, getCode } from './ErrnoCodes.js'
 export { getErrno, getCode }
-export { ShellClient } from './ShellClient'
+export { ShellClient, ContainerConsoleClient } from './ShellClient'
 export { EntitySubscriber } from './EntitySubscriber.js'
 
 export class RPCException

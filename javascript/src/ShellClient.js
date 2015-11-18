@@ -98,3 +98,25 @@ export class ShellClient
         this.socket.send(data);
     }
 }
+
+
+export class ContainerConsoleClient extends ShellClient
+{
+    constructor(client)
+    {
+        super(client);
+    }
+
+    connect(container)
+    {
+        /* Request shell connection */
+        this.client.call("containerd.management.request_console", [container], result => {
+            this.token = result;
+            this.socket = new WebSocket(`ws://${this.client.hostname}:5500/console`);
+            this.socket.onopen = this.__onopen.bind(this);
+            this.socket.onmessage = this.__onmessage.bind(this);
+            this.socket.onclose = this.__onclose.bind(this);
+            this.onOpen();
+        });
+    }
+}

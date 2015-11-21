@@ -312,7 +312,11 @@ class Client(object):
                     call.result = None
                     call.error = msg['args']
                     call.completed.set()
+                    if call.callback is not None:
+                        call.callback(rpc.RpcException(obj=call.error))
+
                     del self.pending_calls[str(call.id)]
+
                 if self.error_callback is not None:
                     self.error_callback(ClientError.RPC_CALL_ERROR)
 
@@ -345,10 +349,7 @@ class Client(object):
         self.__call(call, call_type='auth', custom_payload={'username': username, 'password': password})
         call.completed.wait(timeout)
         if call.error:
-            raise rpc.RpcException(
-                call.error['code'],
-                call.error['message'],
-                call.error['extra'] if 'extra' in call.error else None)
+            raise rpc.RpcException(obj=call.error)
 
         self.token = call.result[0]
 
@@ -357,10 +358,7 @@ class Client(object):
         self.pending_calls[str(call.id)] = call
         self.__call(call, call_type='auth_service', custom_payload={'name': name})
         if call.error:
-            raise rpc.RpcException(
-                call.error['code'],
-                call.error['message'],
-                call.error['extra'] if 'extra' in call.error else None)
+            raise rpc.RpcException(obj=call.error)
 
         call.completed.wait(timeout)
 
@@ -370,10 +368,7 @@ class Client(object):
         self.__call(call, call_type='auth_token', custom_payload={'token': token})
         call.completed.wait(timeout)
         if call.error:
-            raise rpc.RpcException(
-                call.error['code'],
-                call.error['message'],
-                call.error['extra'] if 'extra' in call.error else None)
+            raise rpc.RpcException(obj=call.error)
 
         self.token = call.result[0]
 
@@ -433,7 +428,9 @@ class Client(object):
 
     def call_async(self, name, callback, *args):
         call = self.PendingCall(uuid.uuid4(), name, args)
-        self.pending_calls[call.id] = call
+        call.callback = callback
+        self.pending_calls[str(call.id)] = call
+        self.__call(call)
 
     def call_sync(self, name, *args, **kwargs):
         timeout = kwargs.pop('timeout', self.default_timeout)
@@ -448,10 +445,7 @@ class Client(object):
             raise rpc.RpcException(errno.ETIMEDOUT, 'Call timed out')
 
         if call.result is None and call.error is not None:
-            raise rpc.RpcException(
-                call.error['code'],
-                call.error['message'],
-                call.error['extra'] if 'extra' in call.error else None)
+            raise rpc.RpcException(obj=call.error)
 
         return call.result
 

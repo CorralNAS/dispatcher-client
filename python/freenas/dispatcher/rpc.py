@@ -209,7 +209,7 @@ class RpcService(object):
 
 
 class RpcException(Exception):
-    def __init__(self, code, message, extra=None, stacktrace=None, obj=None):
+    def __init__(self, code=None, message=None, extra=None, stacktrace=None, obj=None):
         if obj:
             self.code = obj['code']
             self.message = obj['message']

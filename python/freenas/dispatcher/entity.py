@@ -68,7 +68,7 @@ class EntitySubscriber(object):
         if isinstance(items, RpcException):
             if callable(self.on_error):
                 self.on_error(items)
-                return
+            return
 
         for i in items:
             self.items[i['id']] = i

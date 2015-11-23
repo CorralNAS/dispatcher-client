@@ -51,7 +51,7 @@ class EntitySubscriber(object):
         self.on_error = None
         self.remote = False
 
-    def __on_changed(self, name, args):
+    def __on_changed(self, args):
         if args['operation'] == 'create':
             self.__add(args['entities'])
             return
@@ -69,7 +69,7 @@ class EntitySubscriber(object):
             if callable(self.on_error):
                 self.on_error(items)
                 return
-            
+
         for i in items:
             self.items[i['id']] = i
             if callable(self.on_add):

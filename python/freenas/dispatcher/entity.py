@@ -99,7 +99,7 @@ class EntitySubscriber(object):
         return len(self.items)
 
     def start(self):
-        self.client.call_async('{0}s.query'.format(self.name), self.__add, [], {'limit': self.items.maxsize})
+        self.client.call_async('{0}.query'.format(self.name), self.__add, [], {'limit': self.items.maxsize})
         self.event_handler = self.client.register_event_handler(
             'entity-subscriber.{0}.changed'.format(self.name),
             self.__on_changed
@@ -113,6 +113,6 @@ class EntitySubscriber(object):
 
     def query(self, *filter, **params):
         if self.remote:
-            return self.client.call_sync('{0}s.query'.format(self.name), filter, params)
+            return self.client.call_sync('{0}.query'.format(self.name), filter, params)
 
         return wrap(list(self.items.values())).query(*filter, **params)

@@ -92,9 +92,6 @@ class EntitySubscriber(object):
 
             del self.items[i]
 
-            if len(self.items) != self.items.maxsize:
-                self.remote = False
-
     def __len__(self):
         return len(self.items)
 

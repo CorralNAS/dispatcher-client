@@ -64,6 +64,7 @@ class ShellClient(object):
 
     def __init__(self, hostname, token, port=5000):
         self.hostname = hostname
+        self.path = 'shell'
         self.port = port
         self.token = token
         self.connection = None
@@ -73,7 +74,10 @@ class ShellClient(object):
         self.close_callback = None
 
     def open(self):
-        self.connection = self.ShellWebsocketHandler('ws://{0}:{1}/shell'.format(self.hostname, self.port), self)
+        self.connection = self.ShellWebsocketHandler(
+            'ws://{0}:{1}/{2}'.format(self.hostname, self.port, self.path),
+            self
+        )
         self.connection.connect()
         self.connection.send(dumps({'token': self.token}))
         while not self.connection.terminated:
@@ -91,3 +95,9 @@ class ShellClient(object):
             return
 
         self.connection.send(data)
+
+
+class VMConsoleClient(ShellClient):
+    def __init__(self, hostname, token, port=5500):
+        super(VMConsoleClient, self).__init__(hostname, token, port)
+        self.path = 'console'

@@ -45,15 +45,19 @@ class FileClient(object):
         def received_message(self, message):
             if not self.parent.authenticated.is_set():
                 try:
-                    ret = loads(message.data)
+                    ret = loads(message.data.decode('utf8'))
                 except ValueError:
-                    self.parent.authenticated.set_exception(RpcException(errno.EINVAL, 'Invalid response from server'))
+                    self.parent.authenticated.set_exception(
+                        RpcException(errno.EINVAL,'Invalid response from server')
+                    )
                     return
 
                 if ret['status'] == 'ok':
                     self.parent.authenticated.set(True)
                 else:
-                    self.parent.authenticated.set_exception(RpcException(errno.EAUTH, 'Invalid token'))
+                    self.parent.authenticated.set_exception(
+                        RpcException(errno.EAUTH, 'Invalid token')
+                    )
 
                 return
 
@@ -73,7 +77,10 @@ class FileClient(object):
         self.close_callback = None
 
     def open(self):
-        self.connection = self.FileWebsocketHandler('ws://{0}:{1}/file'.format(self.hostname, self.port), self)
+        self.connection = self.FileWebsocketHandler(
+            'ws://{0}:{1}/file'.format(self.hostname, self.port),
+            self
+        )
         self.connection.connect()
         self.connection.send(dumps({'token': self.token}))
         self.authenticated.wait()

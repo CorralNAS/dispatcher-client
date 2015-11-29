@@ -24,6 +24,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
+import copy
 from freenas.utils.query import OrderedQueryDict, wrap
 from freenas.dispatcher.rpc import RpcException
 
@@ -64,6 +65,10 @@ class EntitySubscriber(object):
             self.__delete(args['ids'])
             return
 
+        if args['operation'] == 'rename':
+            self.__rename(args['ids'])
+            return
+
     def __add(self, items):
         if isinstance(items, RpcException):
             if callable(self.on_error):
@@ -80,7 +85,10 @@ class EntitySubscriber(object):
 
     def __update(self, items):
         for i in items:
-            oldi = self.items[i['id']]
+            oldi = self.items.get(i['id'])
+            if not oldi:
+                continue
+
             self.items[i['id']] = i
             if callable(self.on_update):
                 self.on_update(oldi, i)
@@ -91,6 +99,19 @@ class EntitySubscriber(object):
                 self.on_delete(self.items[i])
 
             del self.items[i]
+
+    def __rename(self, ids):
+        for old, new in ids:
+            oldi = self.items[old]
+            newi = copy.deepcopy(oldi)
+            newi['id'] = new
+
+            self.items[new] = newi
+
+            if callable(self.on_update):
+                self.on_update(oldi, newi)
+
+            del self.items[old]
 
     def __len__(self):
         return len(self.items)

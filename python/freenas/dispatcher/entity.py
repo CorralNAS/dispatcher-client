@@ -41,7 +41,7 @@ class CappedQueryDict(OrderedQueryDict):
 
 
 class EntitySubscriber(object):
-    def __init__(self, client, name, maxsize=2000):
+    def __init__(self, client, name, maxsize=5000):
         self.client = client
         self.name = name
         self.event_handler = None

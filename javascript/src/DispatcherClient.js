@@ -24,6 +24,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  */
+require("babel-polyfill");
 
 const INVALID_JSON_RESPONSE = 1;
 const CONNECTION_TIMEOUT = 2;

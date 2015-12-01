@@ -132,7 +132,7 @@ class CappedMap
     set(key, value)
     {
         this.map.set(key, value);
-        if (this.map.size() > this.maxsize) {
+        if (this.map.size > this.maxsize) {
             let mapIter = this.map.entries();
             this.map.delete(mapIter.next().key);
         }

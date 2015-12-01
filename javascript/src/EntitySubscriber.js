@@ -188,6 +188,15 @@ export class EntitySubscriber
         this.onDelete = () => {};
     }
 
+    fetch()
+    {
+        this.client.call(`${this.name}.query`, [[], {"limit": this.maxsize}], result => {
+            for (let i of result) {
+                this.objects.set(i.id, i);
+            }
+        });
+    }
+
     start()
     {
         this.handlerCookie = this.client.registerEventHandler(

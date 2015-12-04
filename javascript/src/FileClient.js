@@ -28,102 +28,108 @@ import { getErrno, getCode } from "./ErrnoCodes.js"
 
 export class FileClient
 {
-    constructor(client) {
-        this.client = client;
-        this.socket = null;
-        this.token = null;
-        this.authenticated = false;
+    constructor( client ) {
+      this.client = client;
+      this.socket = null;
+      this.token = null;
+      this.authenticated = false;
 
-        /* Callbacks */
-        this.onOpen = () => {};
-        this.onClose = () => {};
-        this.onData = () => {};
-        this.onError = () => {};
+      /* Callbacks */
+      this.onOpen = () => { };
+      this.onClose = () => { };
+      this.onData = () => { };
+      this.onError = () => { };
     }
 
     __onopen() {
-        this.socket.send(JSON.stringify({ token: this.token }));
-        this.onOpen();
+      this.socket.send( JSON.stringify(
+        { token: this.token }
+      ) );
+      this.onOpen();
     }
-    
+
+
     __onclose() {
-        this.onClose();
+      this.onClose();
     }
 
-    __onerror(ev) {
-        alert(getErrno( ev.code));
-        this.onError();
+    __onerror( ev ) {
+      alert( getErrno( ev.code ) );
+      this.onError();
     }
 
-    __onmessage(msg) {
-        if (!this.authenticated) {
-            let payload = JSON.parse(msg.data);
-            if (payload.status == "ok") {
-                this.authenticated = true;
-            } else {
-                /* XXX error */
-                console.log("FileConnection not authenticated? paylod: ", payload);
-            }
-
-            return;
+    __onmessage( msg ) {
+      if ( !this.authenticated ) {
+        let payload = JSON.parse( msg.data );
+        if ( payload.status == "ok" ) {
+          this.authenticated = true;
+        } else {
+          /* XXX error */
+          console.log( "FileConnection not authenticated? paylod: ", paylod );
         }
 
-        var reader = new FileReader();
-        reader.onload = () => { this.onData(reader.result); };
-        reader.readAsBinaryString(msg.data);
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = () => { this.onData( reader.result ); };
+      reader.readAsBinaryString( msg.data );
     }
 
-    upload(destPath, size, mode) {
-        /* Request upload file connection websocket */
-        this.client.call("filesystem.upload",
-            [ destPath, size, mode ],
-            result => {
-                this.token = result;
-                this.socket = new WebSocket(`ws://${this.client.hostname}:5000/file`);
-                if (this.socket instanceof WebSocket) {
-                    Object.assign(this.socket, {
-                        onopen: this.__onopen.bind(this),
-                        onmessage: this.__onmessage.bind(this),
-                        onerror: this.__onerror.bind(this),
-                        onclose: this.__onclose.bind(this)
-                    }, this);
-                } else {
-                    throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
-                }
+    upload( destPath, size, mode ) {
+      /* Request upload file connection websocket */
+      this.client.call
+        ( "filesystem.upload"
+        , [ destPath, size, mode ]
+        , result => {
+            this.token = result;
+            this.socket = new WebSocket( `ws://${this.client.hostname}:5000/file` );
+            if ( this.socket instanceof WebSocket ) {
+              Object.assign( this.socket
+                           , { onopen: this.__onopen.bind( this )
+                             , onmessage: this.__onmessage.bind( this )
+                             , onerror: this.__onerror.bind( this )
+                             , onclose: this.__onclose.bind( this )
+                             }
+                           , this
+              );
+            } else {
+              throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
             }
-        );
+        }
+      );
     }
 
-    download(path) {
-        /* Request download file connection websocket */
-        this.client.cal("filesystem.download",
-            [ path ],
-            result => {
-                this.token = result;
-                this.socket = new WebSocket(`ws://${this.client.hostname}:5000/file`);
-                if (this.socket instanceof WebSocket) {
-                    Object.assign(this.socket, {
-                        onopen: this.__onopen.bind(this),
-                        onmessage: this.__onmessage.bind(this),
-                        onerror: this.__onerror.bind(this),
-                        onclose: this.__onclose.bind(this)
-                    }, this);
-                } else {
-                    throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
-                }
-            }
-        );
+    download( path ) {
+      /* Request download file connection websocket */
+      this.client.call
+        ( "filesystem.download"
+        , [ path ]
+        , result => {
+          this.token = result;
+          this.socket = new WebSocket( `ws://${this.client.hostname}:5000/file` );
+          if ( this.socket instanceof WebSocket ) {
+            Object.assign( this.socket
+                         , { onopen: this.__onopen.bind( this )
+                           , onmessage: this.__onmessage.bind( this )
+                           , onerror: this.__onerror.bind( this )
+                           , onclose: this.__onclose.bind( this )
+                           }
+                         , this
+            );
+          } else {
+            throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
+          }
+        }
+      );
     }
 
     disconnect() {
-        if (this.socket === null)
-        {
-
-        }
-        this.socket.close();
+      if ( this.socket === null ) { };
+      this.socket.close();
     }
 
-    send(data) {
-      this.socket.send(data);
+    send( data ) {
+      this.socket.send( data );
     }
 }

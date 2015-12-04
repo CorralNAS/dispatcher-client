@@ -24,6 +24,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  */
+import { getErrno, getCode } from "./ErrnoCodes.js"
 
 export class FileClient
 {
@@ -37,17 +38,24 @@ export class FileClient
       this.onOpen = () => { };
       this.onClose = () => { };
       this.onData = () => { };
+      this.onError = () => { };
     }
 
     __onopen() {
       this.socket.send( JSON.stringify(
         { token: this.token }
       ) );
+      this.onOpen();
     }
 
 
     __onclose() {
       this.onClose();
+    }
+
+    __onerror( ev ) {
+      alert( getErrno( ev.code ) );
+      this.onError();
     }
 
     __onmessage( msg ) {
@@ -57,6 +65,7 @@ export class FileClient
           this.authenticated = true;
         } else {
           /* XXX error */
+          console.log( "FileConnection not authenticated? paylod: ", paylod );
         }
 
         return;
@@ -75,10 +84,18 @@ export class FileClient
         , result => {
             this.token = result;
             this.socket = new WebSocket( `ws://${this.client.hostname}:5000/file` );
-            this.socket.onopen = this.__onopen.bind( this );
-            this.socket.onmessage = this.__onmessage.bind( this );
-            this.socket.onclose = this.__onclose.bind( this );
-            this.onOpen();
+            if ( this.socket instanceof WebSocket ) {
+              Object.assign( this.socket
+                           , { onopen: this.__onopen.bind( this )
+                             , onmessage: this.__onmessage.bind( this )
+                             , onerror: this.__onerror.bind( this )
+                             , onclose: this.__onclose.bind( this )
+                             }
+                           , this
+              );
+            } else {
+              throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
+            }
         }
       );
     }
@@ -91,10 +108,18 @@ export class FileClient
         , result => {
           this.token = result;
           this.socket = new WebSocket( `ws://${this.client.hostname}:5000/file` );
-          this.socket.onopen = this.__onopen.bind( this );
-          this.socket.onmessage = this.__onmessage.bind( this );
-          this.socket.onclose = this.__onclose.bind( this );
-          this.onOpen();
+          if ( this.socket instanceof WebSocket ) {
+            Object.assign( this.socket
+                         , { onopen: this.__onopen.bind( this )
+                           , onmessage: this.__onmessage.bind( this )
+                           , onerror: this.__onerror.bind( this )
+                           , onclose: this.__onclose.bind( this )
+                           }
+                         , this
+            );
+          } else {
+            throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
+          }
         }
       );
     }

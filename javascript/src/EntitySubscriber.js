@@ -88,7 +88,7 @@ function evalLogicOperator(item, t){
 function evalFieldOperator(item, t){
     let [left, op, right] = t;
 
-    if (t.length == 4){
+    if (Object.keys(t).length == 4){
         right = conversions_table[t[3]](right);
     }
 
@@ -96,10 +96,10 @@ function evalFieldOperator(item, t){
 }
 
 function evalTuple(item, t){
-    if (t.length == 2){
+    if (Object.keys(t).length == 2){
         return evalLogicOperator(item, t);
     }
-    if ((t.length == 3)||(t.length == 4)){
+    if ((Object.keys(t).length == 3)||(Object.keys(t).length == 4)){
         return evalFieldOperator(item, t);
     }
 }
@@ -145,14 +145,14 @@ class CappedMap
 
     getSize()
     {
-        return this.map.size();
+        return this.map.size;
     }
 
     setMaxSize(maxsize)
     {
         if (maxsize < this.maxsize){
             let mapIter = this.map.entries();
-            let deleteSize = this.map.size() - maxsize;
+            let deleteSize = this.map.size - maxsize;
             for (i = 0; i < deleteSize; i++){
                 this.map.delete(mapIter.next().key);
             }
@@ -201,7 +201,7 @@ export class EntitySubscriber
     {
         this.handlerCookie = this.client.registerEventHandler(
             `entity-subscriber.${this.name}.changed`,
-            this.__onChanged
+            this.__onChanged.bind(this)
         );
     }
 
@@ -215,48 +215,60 @@ export class EntitySubscriber
 
     __onChanged(event)
     {
-        if (event.action == "create") {
+        if (event.operation == "create") {
             for (let entity of event.entities)
                 this.objects.set(entity.id, entity);
         }
 
-        if (event.action == "update") {
+        if (event.operation == "update") {
             for (let entity of event.entities)
                 this.objects.set(entity.id, entity);
         }
 
-        if (event.action == "delete") {
-            for (let entity of event.entities)
-                if (this.objects.has(entity.id))
-                    this.objects.deleteKey(entity.id);
+        if (event.operation == "rename") {
+            for (let [old_id, new_id] of event.ids)
+                if (this.objects.has(old_id)) {
+                    let entity = this.objects.get(old_id);
+                    entity.id = new_id;
+                    this.objects.set(entity.id, entity);
+                    this.objects.deleteKey(old_id);
+                }
+        }
+
+        if (event.operation == "delete") {
+            for (let id of event.ids)
+                if (this.objects.has(id))
+                    this.objects.deleteKey(id);
         }
     }
 
     query(rules, params, callback){
         if (this.objects.getSize() == this.maxsize){
-            DispatcherClient.call(`${this.name}.query`, rules.concat(params), callback);
+            DispatcherClient.call(`${this.name}.query`, [rules, params], callback);
         } else {
-            let single = params["single"];
-            let count = params["count"];
-            let offset = params["offset"];
-            let limit = params["limit"];
-            let sort = params["sort"];
-            let result = new Array();
+            let _single = params["single"];
+            let _count = params["count"];
+            let _offset = params["offset"];
+            let _limit = params["limit"];
+            let _sort = params["sort"];
+            let _result = new Array();
 
-            if (rules.length == 0){
-                result = this.objects.entries();
+            if (Object.keys(rules).length == 0){
+                for (let [key, value] of this.objects.entries()){
+                    _result.push(value);
+                }
             } else {
-                for (let i of this.objects.entries()){
-                    if(matches(i, rules)){
-                       result.push(i);
+                for (let [key, value] of this.objects.entries()){
+                    if(matches(value, rules)){
+                       _result.push(value);
                     }
                 }
             }
 
-            if (sort){
+            if (_sort){
                 let sortKeys = [];
                 let direction = [];
-                for (let i of sort){
+                for (let i of _sort){
                     if (i.charAt(0) == '-'){
                         sortKeys.push(i.slice(1));
                         direction.push('desc');
@@ -265,30 +277,30 @@ export class EntitySubscriber
                         direction.push('asc');
                     }
                 }
-                _.map(_.sortByOrder(result, sortKeys, direction), _.values);
+                _.map(_.sortByOrder(_result, sortKeys, direction), _.values);
             }
 
-            if (offset){
-                callback(result.slice(offset));
+            if (_offset){
+                callback(_result.slice(_offset));
             }
 
-            if (limit) {
-                callback(result.slice(0,limit));
+            if (_limit) {
+                callback(_result.slice(0,_limit));
             }
 
-            if ((!result.length) && (single)){
+            if ((!_result.length) && (_single)){
                 callback(null);
             }
 
-            if (single) {
-                callback(result[0]);
+            if (_single) {
+                callback(_result[0]);
             }
 
-            if (count) {
-                callback(result.length);
+            if (_count) {
+                callback(_result.length);
             }
 
-            callback(result);
+            callback(_result);
         }
     }
 }

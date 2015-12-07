@@ -351,17 +351,17 @@ class ClientTransportSSH(ClientTransportBase):
         recv_t = spawn_thread(target=self.recv)
         recv_t.setDaemon(True)
         recv_t.start()
-        closed_t = spawn_thread(target=self.closed)
-        closed_t.setDaemon(True)
-        closed_t.start()
 
     def send(self, message):
         if self.terminated is False:
             header = struct.pack('II', 0xdeadbeef, len(message))
             message = header + message.encode('utf-8')
-            self.stdin.write(message)
-            self.stdin.flush()
-            debug_log("Sent data: {0}", message)
+            try:
+                self.stdin.write(message)
+                self.stdin.flush()
+                debug_log("Sent data: {0}", message)
+            except OSError:
+                self.closed()
 
     def recv(self):
         while self.terminated is False:
@@ -383,8 +383,7 @@ class ClientTransportSSH(ClientTransportBase):
                 self.parent.recv(message)
 
     def closed(self):
-        exit_status = self.channel.recv_exit_status()
-        debug_log("Transport connection has closed with exit status {0}", exit_status)
+        debug_log("Transport connection has been closed abnormally.")
         self.terminated = True
         self.ssh.close()
         self.parent.drop_pending_calls()

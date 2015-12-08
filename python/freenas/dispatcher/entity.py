@@ -25,19 +25,20 @@
 #
 
 import copy
-from freenas.utils.query import OrderedQueryDict, wrap
+from collections import OrderedDict
+from freenas.utils.query import wrap
 from freenas.dispatcher.rpc import RpcException
 
 
-class CappedQueryDict(OrderedQueryDict):
+class CappedDict(OrderedDict):
     def __init__(self, maxsize):
-        super(CappedQueryDict, self).__init__()
+        super(CappedDict, self).__init__()
         self.maxsize = maxsize
 
     def __setitem__(self, key, value):
         if len(self) == self.maxsize:
             self.popitem(last=False)
-        super(CappedQueryDict, self).__setitem__(key, value)
+        super(CappedDict, self).__setitem__(key, value)
 
 
 class EntitySubscriber(object):
@@ -45,7 +46,7 @@ class EntitySubscriber(object):
         self.client = client
         self.name = name
         self.event_handler = None
-        self.items = CappedQueryDict(maxsize)
+        self.items = CappedDict(maxsize)
         self.on_add = None
         self.on_update = None
         self.on_delete = None

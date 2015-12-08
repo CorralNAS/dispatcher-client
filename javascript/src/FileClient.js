@@ -49,7 +49,8 @@ export class FileClient
     }
 
 
-    __onclose() {
+    __onclose( closeEv ) {
+      console.log( "FileConnection onclose event: ", closeEv );
       this.onClose();
     }
 
@@ -65,7 +66,7 @@ export class FileClient
           this.authenticated = true;
         } else {
           /* XXX error */
-          console.log( "FileConnection not authenticated? paylod: ", paylod );
+          console.log( "FileConnection not authenticated? payload: ", payload );
         }
 
         return;
@@ -91,7 +92,6 @@ export class FileClient
                              , onerror: this.__onerror.bind( this )
                              , onclose: this.__onclose.bind( this )
                              }
-                           , this
               );
             } else {
               throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
@@ -115,7 +115,6 @@ export class FileClient
                            , onerror: this.__onerror.bind( this )
                            , onclose: this.__onclose.bind( this )
                            }
-                         , this
             );
           } else {
             throw new Error( "Was unable to create a WebSocket instance for FileConnection" );

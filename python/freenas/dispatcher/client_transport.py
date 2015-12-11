@@ -433,9 +433,7 @@ class ClientTransportSock(ClientTransportBase):
             recv_t.setDaemon(True)
             recv_t.start()
         except socket.error as err:
-            self.sock.close()
-            self.fd.close()
-            self.terminated = True
+            self.closed()
             debug_log('Socket connection exception: {0}', err)
             raise
 

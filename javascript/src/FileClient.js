@@ -100,27 +100,41 @@ export class FileClient
       );
     }
 
-    download( path ) {
-      /* Request download file connection websocket */
-      this.client.call
-        ( "filesystem.download"
-        , [ path ]
-        , result => {
-          this.token = result;
-          this.socket = new WebSocket( `ws://${this.client.hostname}:5000/file` );
-          if ( this.socket instanceof WebSocket ) {
-            Object.assign( this.socket
-                         , { onopen: this.__onopen.bind( this )
-                           , onmessage: this.__onmessage.bind( this )
-                           , onerror: this.__onerror.bind( this )
-                           , onclose: this.__onclose.bind( this )
-                           }
-            );
-          } else {
-            throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
+    download( path, filename, downloadType ) {
+      if ( downloadType === "stream" ) {
+        /* Request download file connection websocket */
+        this.client.call
+          ( "filesystem.download"
+          , [ path ]
+          , result => {
+            this.token = result;
+            this.socket = new WebSocket( `ws://${this.client.hostname}:5000/file` );
+            if ( this.socket instanceof WebSocket ) {
+              Object.assign( this.socket
+                           , { onopen: this.__onopen.bind( this )
+                             , onmessage: this.__onmessage.bind( this )
+                             , onerror: this.__onerror.bind( this )
+                             , onclose: this.__onclose.bind( this )
+                             }
+              );
+            } else {
+              throw new Error( "Was unable to create a WebSocket instance for FileConnection" );
+            }
           }
-        }
-      );
+        );
+      } else {
+        this.client.call
+          ( "filesystem.download"
+          , [ path ]
+          , result => {
+            this.token = result;
+            var downloadLink = document.createElement( "a" );
+            downloadLink.href = `http://${this.client.hostname}:5000/filedownload?token=${this.token}`;
+            downloadLink.download = filename;
+            downloadLink.click();
+          }
+          );
+      }
     }
 
     disconnect() {

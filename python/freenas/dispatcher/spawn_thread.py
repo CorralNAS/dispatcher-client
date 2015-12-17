@@ -28,20 +28,19 @@
 import os
 import enum
 
+
 class ClientType(enum.Enum):
     THREADED = 1
     GEVENT = 2
 
+
 if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
-    from gevent.lock import RLock
-    from gevent.event import Event
     from gevent.greenlet import Greenlet
     _thread_type = ClientType.GEVENT
 else:
     from threading import Thread
-    from threading import Event
-    from threading import RLock
     _thread_type = ClientType.THREADED
+
 
 def spawn_thread(*args, **kwargs):
     if _thread_type == ClientType.THREADED:

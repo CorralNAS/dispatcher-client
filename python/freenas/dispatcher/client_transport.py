@@ -35,9 +35,10 @@ from freenas.dispatcher.spawn_thread import ClientType
 from abc import ABCMeta, abstractmethod
 from six import with_metaclass
 import struct
-from ws4py.messaging import BinaryMessage
+
 
 _debug_log_file = None
+
 
 if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
     from ws4py.client.geventclient import WebSocketClient

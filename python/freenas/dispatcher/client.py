@@ -229,6 +229,19 @@ class Client(object):
             while True:
                 time.sleep(60)
 
+    def wait_for_call(self, call, timeout=None):
+        if not timeout:
+            timeout = self.default_timeout
+
+        elapsed = 0
+        while elapsed < timeout:
+            if call.completed.wait(1):
+                return True
+
+            elapsed += 1
+
+        return False
+
     def drop_pending_calls(self):
         message = "Connection closed"
         for key, call in list(self.pending_calls.items()):
@@ -347,7 +360,7 @@ class Client(object):
         call = self.PendingCall(uuid.uuid4(), 'auth')
         self.pending_calls[str(call.id)] = call
         self.__call(call, call_type='auth', custom_payload={'username': username, 'password': password})
-        call.completed.wait(timeout)
+        self.wait_for_call(call, timeout)
         if call.error:
             raise rpc.RpcException(obj=call.error)
 
@@ -360,13 +373,13 @@ class Client(object):
         if call.error:
             raise rpc.RpcException(obj=call.error)
 
-        call.completed.wait(timeout)
+        self.wait_for_call(call, timeout)
 
     def login_token(self, token, timeout=None):
         call = self.PendingCall(uuid.uuid4(), 'auth')
         self.pending_calls[str(call.id)] = call
         self.__call(call, call_type='auth_token', custom_payload={'token': token})
-        call.completed.wait(timeout)
+        self.wait_for_call(call, timeout)
         if call.error:
             raise rpc.RpcException(obj=call.error)
 
@@ -431,6 +444,7 @@ class Client(object):
         call.callback = callback
         self.pending_calls[str(call.id)] = call
         self.__call(call)
+        return call
 
     def call_sync(self, name, *args, **kwargs):
         timeout = kwargs.pop('timeout', self.default_timeout)
@@ -438,7 +452,7 @@ class Client(object):
         self.pending_calls[str(call.id)] = call
         self.__call(call)
 
-        if not call.completed.wait(timeout):
+        if not self.wait_for_call(call, timeout):
             if self.error_callback:
                 self.error_callback(ClientError.RPC_CALL_TIMEOUT, method=call.method, args=call.args)
 

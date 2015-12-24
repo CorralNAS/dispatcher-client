@@ -230,11 +230,8 @@ class Client(object):
                 time.sleep(60)
 
     def wait_for_call(self, call, timeout=None):
-        if not timeout:
-            timeout = self.default_timeout
-
         elapsed = 0
-        while elapsed < timeout:
+        while timeout is None or elapsed < timeout:
             if call.completed.wait(1):
                 return True
 

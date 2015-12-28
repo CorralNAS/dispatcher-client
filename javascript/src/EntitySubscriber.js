@@ -246,11 +246,11 @@ export class EntitySubscriber
         if (this.objects.getSize() == this.maxsize){
             this.client.call(`${this.name}.query`, [rules, params], callback);
         } else {
-            let _single = params["single"];
-            let _count = params["count"];
-            let _offset = params["offset"];
-            let _limit = params["limit"];
-            let _sort = params["sort"];
+            let _single = params.single;
+            let _count = params.count;
+            let _offset = params.offset;
+            let _limit = params.limit;
+            let _sort = params.sort;
             let _result = new Array();
 
             if (Object.keys(rules).length == 0){

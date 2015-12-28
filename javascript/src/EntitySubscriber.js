@@ -244,7 +244,7 @@ export class EntitySubscriber
 
     query(rules, params, callback){
         if (this.objects.getSize() == this.maxsize){
-            DispatcherClient.call(`${this.name}.query`, [rules, params], callback);
+            this.client.call(`${this.name}.query`, [rules, params], callback);
         } else {
             let _single = params["single"];
             let _count = params["count"];

@@ -53,24 +53,24 @@ class EntitySubscriber(object):
         self.on_error = None
         self.remote = False
 
-    def __on_changed(self, args):
+    def __on_changed(self, args, event=True):
         if args['operation'] == 'create':
-            self.__add(args['entities'])
+            self.__add(args['entities'], event)
             return
 
         if args['operation'] == 'update':
-            self.__update(args['entities'])
+            self.__update(args['entities'], event)
             return
 
         if args['operation'] == 'delete':
-            self.__delete(args['ids'])
+            self.__delete(args['ids'], event)
             return
 
         if args['operation'] == 'rename':
-            self.__rename(args['ids'])
+            self.__rename(args['ids'], event)
             return
 
-    def __add(self, items):
+    def __add(self, items, event=True):
         if isinstance(items, RpcException):
             if callable(self.on_error):
                 self.on_error(items)
@@ -78,30 +78,30 @@ class EntitySubscriber(object):
 
         for i in items:
             self.items[i['id']] = i
-            if callable(self.on_add):
+            if callable(self.on_add) and event:
                 self.on_add(i)
 
             if len(self.items) == self.items.maxsize:
                 self.remote = True
 
-    def __update(self, items):
+    def __update(self, items, event=True):
         for i in items:
             oldi = self.items.get(i['id'])
             if not oldi:
                 continue
 
             self.items[i['id']] = i
-            if callable(self.on_update):
+            if callable(self.on_update) and event:
                 self.on_update(oldi, i)
 
-    def __delete(self, ids):
+    def __delete(self, ids, event=True):
         for i in ids:
-            if callable(self.on_delete):
+            if callable(self.on_delete) and event:
                 self.on_delete(self.items[i])
 
             del self.items[i]
 
-    def __rename(self, ids):
+    def __rename(self, ids, event=True):
         for old, new in ids:
             oldi = self.items[old]
             newi = copy.deepcopy(oldi)
@@ -109,7 +109,7 @@ class EntitySubscriber(object):
 
             self.items[new] = newi
 
-            if callable(self.on_update):
+            if callable(self.on_update) and event:
                 self.on_update(oldi, newi)
 
             del self.items[old]
@@ -118,7 +118,12 @@ class EntitySubscriber(object):
         return len(self.items)
 
     def start(self):
-        self.client.call_async('{0}.query'.format(self.name), self.__add, [], {'limit': self.items.maxsize})
+        self.client.call_async(
+            '{0}.query'.format(self.name),
+            lambda x: self.__add(x, False), [],
+            {'limit': self.items.maxsize}
+        )
+
         self.event_handler = self.client.register_event_handler(
             'entity-subscriber.{0}.changed'.format(self.name),
             self.__on_changed

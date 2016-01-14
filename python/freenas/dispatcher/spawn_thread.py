@@ -43,8 +43,11 @@ else:
 
 
 def spawn_thread(*args, **kwargs):
+    daemon = kwargs.pop('daemon', False)
     if _thread_type == ClientType.THREADED:
-        return Thread(*args, **kwargs)
+        thread = Thread(*args, **kwargs)
+        thread.setDaemon(daemon)
+        return thread
 
     if _thread_type == ClientType.GEVENT:
         run = kwargs.pop('target')

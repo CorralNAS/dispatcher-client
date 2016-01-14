@@ -349,8 +349,7 @@ class ClientTransportSSH(ClientTransportBase):
 
         self.channel = self.ssh.get_transport().open_session()
 
-        recv_t = spawn_thread(target=self.recv)
-        recv_t.setDaemon(True)
+        recv_t = spawn_thread(target=self.recv, daemon=True)
         recv_t.start()
 
     def send(self, message):
@@ -430,8 +429,7 @@ class ClientTransportSock(ClientTransportBase):
 
             debug_log('Connected to {0}', self.path)
 
-            recv_t = spawn_thread(target=self.recv)
-            recv_t.setDaemon(True)
+            recv_t = spawn_thread(target=self.recv, daemon=True)
             recv_t.start()
         except socket.error as err:
             self.closed()

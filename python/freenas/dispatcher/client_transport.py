@@ -435,6 +435,9 @@ class ClientTransportSock(ClientTransportBase):
             self.closed()
             debug_log('Socket connection exception: {0}', err)
             raise
+        except FileNotFoundError as err:
+            self.closed()
+            debug_log('Socket file not found: {0}', err)
 
     @property
     def address(self):

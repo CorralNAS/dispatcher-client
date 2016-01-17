@@ -431,8 +431,8 @@ class ClientTransportSock(ClientTransportBase):
 
             recv_t = spawn_thread(target=self.recv, daemon=True)
             recv_t.start()
-        except socket.error as err:
-            self.closed()
+        except (socket.error, OSError) as err:
+            self.close()
             debug_log('Socket connection exception: {0}', err)
             raise
 
@@ -471,7 +471,7 @@ class ClientTransportSock(ClientTransportBase):
                 self.parent.recv(message)
 
     def close(self):
-        debug_log("Transport connection closed by client.")
+        debug_log("Connect failed.")
         self.terminated = True
         self.sock.close()
         self.fd.close()

@@ -231,6 +231,19 @@ class RpcException(Exception):
             self.extra if self.extra else '')
 
 
+class RpcWarning(Warning):
+    def __init__(self, code=None, message=None, extra=None, obj=None):
+        if obj:
+            self.code = obj['code']
+            self.message = obj['message']
+            self.extra = obj.get('extra')
+            return
+
+        self.code = code
+        self.message = message
+        self.extra = extra
+
+
 class ServerLockProxy(object):
     def __init__(self, conn, name):
         self.conn = conn

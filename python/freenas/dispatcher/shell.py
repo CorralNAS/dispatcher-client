@@ -60,7 +60,8 @@ class ShellClient(object):
             self.parent.read_callback(message.data)
 
         def closed(self, code, reason=None):
-            self.parent.close_callback()
+            if callable(self.parent.close_callback):
+                self.parent.close_callback()
 
     def __init__(self, hostname, token, port=5000):
         self.hostname = hostname
@@ -83,6 +84,9 @@ class ShellClient(object):
         while not self.connection.terminated:
             if self.authenticated.wait(1):
                 break
+
+    def close(self):
+        self.connection.close()
 
     def on_data(self, callback):
         self.read_callback = callback

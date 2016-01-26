@@ -24,10 +24,20 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
+import os
 import copy
 from collections import OrderedDict
 from freenas.utils.query import wrap
 from freenas.dispatcher.rpc import RpcException
+
+
+if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
+    from gevent.queue import Queue
+else:
+    try:
+        from queue import Queue
+    except ImportError:
+        from Queue import Queue
 
 
 class CappedDict(OrderedDict):
@@ -52,6 +62,7 @@ class EntitySubscriber(object):
         self.on_delete = None
         self.on_error = None
         self.remote = False
+        self.listeners = {}
 
     def __on_changed(self, args, event=True):
         if args['operation'] == 'create':
@@ -86,13 +97,7 @@ class EntitySubscriber(object):
 
     def __update(self, items, event=True):
         for i in items:
-            oldi = self.items.get(i['id'])
-            if not oldi:
-                continue
-
-            self.items[i['id']] = i
-            if callable(self.on_update) and event:
-                self.on_update(oldi, i)
+            self.update(i, event)
 
     def __delete(self, ids, event=True):
         for i in ids:
@@ -140,3 +145,25 @@ class EntitySubscriber(object):
             return self.client.call_sync('{0}.query'.format(self.name), filter, params)
 
         return wrap(list(self.items.values())).query(*filter, **params)
+
+    def update(self, obj, event=True):
+        oldobj = self.items.get(obj['id'])
+        if not oldobj:
+            return
+
+        self.items[obj['id']] = obj
+        if callable(self.on_update) and event:
+            self.on_update(oldobj, obj)
+            if obj['id'] in self.listeners:
+                for i in self.listeners[obj['id']]:
+                    i.put(('update', oldobj, obj))
+
+    def listen(self, id):
+        q = Queue(1)
+        self.listeners.setdefault(id, []).append(q)
+        while True:
+            try:
+                yield q.get()
+            except GeneratorExit:
+                self.listeners[id].remove(q)
+                raise StopIteration

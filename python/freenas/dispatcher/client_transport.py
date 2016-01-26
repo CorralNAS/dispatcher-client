@@ -30,6 +30,7 @@ import os
 import errno
 import paramiko
 import socket
+import time
 from freenas.dispatcher.spawn_thread import spawn_thread
 from freenas.dispatcher.spawn_thread import ClientType
 from abc import ABCMeta, abstractmethod
@@ -421,20 +422,29 @@ class ClientTransportSock(ClientTransportBase):
         if not self.parent:
             raise RuntimeError('ClientTransportSock can be only created inside of a class')
 
+        timeout = kwargs.get('timeout', 30)
+
         if url.path:
             self.path = url.path
 
-        try:
-            self.sock.connect(self.path)
+        while True:
+            try:
+                self.sock.connect(self.path)
 
-            debug_log('Connected to {0}', self.path)
+                debug_log('Connected to {0}', self.path)
+                break
+            except (socket.error, OSError) as err:
+                if timeout:
+                    timeout -= 1
+                    time.sleep(1)
+                    continue
+                else:
+                    self.close()
+                    debug_log('Socket connection exception: {0}', err)
+                    raise
 
-            recv_t = spawn_thread(target=self.recv, daemon=True)
-            recv_t.start()
-        except (socket.error, OSError) as err:
-            self.close()
-            debug_log('Socket connection exception: {0}', err)
-            raise
+        recv_t = spawn_thread(target=self.recv, daemon=True)
+        recv_t.start()
 
     @property
     def address(self):

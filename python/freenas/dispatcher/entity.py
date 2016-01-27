@@ -161,7 +161,6 @@ class EntitySubscriber(object):
                 for i in self.listeners[obj['id']]:
                     i.put(('update', oldobj, obj))
 
-
     def listen(self, id):
         q = Queue(1)
         self.listeners.setdefault(id, []).append(q)

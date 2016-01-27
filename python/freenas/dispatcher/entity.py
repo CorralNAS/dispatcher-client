@@ -146,6 +146,9 @@ class EntitySubscriber(object):
 
         return wrap(list(self.items.values())).query(*filter, **params)
 
+    def viewport(self, *filter, **params):
+        return wrap(list(self.items.values())).query(*filter, **params)
+
     def update(self, obj, event=True):
         oldobj = self.items.get(obj['id'])
         if not oldobj:
@@ -158,8 +161,6 @@ class EntitySubscriber(object):
                 for i in self.listeners[obj['id']]:
                     i.put(('update', oldobj, obj))
 
-    def viewport(self):
-        return self.items.values()
 
     def listen(self, id):
         q = Queue(1)

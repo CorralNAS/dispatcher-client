@@ -52,7 +52,7 @@ class CappedDict(OrderedDict):
 
 
 class EntitySubscriber(object):
-    def __init__(self, client, name, maxsize=5000):
+    def __init__(self, client, name, maxsize=2000):
         self.client = client
         self.name = name
         self.event_handler = None
@@ -157,6 +157,9 @@ class EntitySubscriber(object):
             if obj['id'] in self.listeners:
                 for i in self.listeners[obj['id']]:
                     i.put(('update', oldobj, obj))
+
+    def viewport(self):
+        return self.items.values()
 
     def listen(self, id):
         q = Queue(1)

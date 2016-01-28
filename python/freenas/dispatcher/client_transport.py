@@ -43,11 +43,13 @@ _debug_log_file = None
 
 if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
     from ws4py.client.geventclient import WebSocketClient
+    from gevent.lock import Lock
     from gevent.event import Event
     _thread_type = ClientType.GEVENT
 else:
     from ws4py.client.threadedclient import WebSocketClient
     from threading import Event
+    from threading import Lock
     _thread_type = ClientType.THREADED
 
 
@@ -414,6 +416,7 @@ class ClientTransportSock(ClientTransportBase):
         self.parent = None
         self.terminated = False
         self.fd = None
+        self.close_lock = Lock()
 
     def connect(self, url, parent, **kwargs):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -457,7 +460,10 @@ class ClientTransportSock(ClientTransportBase):
             sent = self.fd.write(message)
             self.fd.flush()
             if sent == 0:
-                self.closed()
+                self.close_lock.acquire()
+                if self.terminated is False:
+                    self.closed()
+                self.close_lock.release()
             else:
                 debug_log("Sent data: {0}", message)
 
@@ -465,7 +471,10 @@ class ClientTransportSock(ClientTransportBase):
         while self.terminated is False:
             header = self.fd.read(8)
             if header == b'' or len(header) != 8:
-                self.closed()
+                self.close_lock.acquire()
+                if self.terminated is False:
+                    self.closed()
+                self.close_lock.release()
                 break
 
             magic, length = struct.unpack('II', header)
@@ -475,7 +484,10 @@ class ClientTransportSock(ClientTransportBase):
 
             message = self.fd.read(length)
             if message == b'' or len(message) != length:
-                self.closed()
+                self.close_lock.acquire()
+                if self.terminated is False:
+                    self.closed()
+                self.close_lock.release()
             else:
                 debug_log("Received data: {0}", message)
                 self.parent.recv(message)

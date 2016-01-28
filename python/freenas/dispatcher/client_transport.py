@@ -460,8 +460,7 @@ class ClientTransportSock(ClientTransportBase):
             sent = self.fd.write(message)
             self.fd.flush()
             if sent == 0:
-                with self.close_lock:
-                    self.closed()
+                self.closed()
             else:
                 debug_log("Sent data: {0}", message)
 
@@ -469,8 +468,7 @@ class ClientTransportSock(ClientTransportBase):
         while self.terminated is False:
             header = self.fd.read(8)
             if header == b'' or len(header) != 8:
-                with self.close_lock:
-                    self.closed()
+                self.closed()
                 break
 
             magic, length = struct.unpack('II', header)
@@ -480,8 +478,7 @@ class ClientTransportSock(ClientTransportBase):
 
             message = self.fd.read(length)
             if message == b'' or len(message) != length:
-                with self.close_lock:
-                    self.closed()
+                self.closed()
             else:
                 debug_log("Received data: {0}", message)
                 self.parent.recv(message)
@@ -493,12 +490,13 @@ class ClientTransportSock(ClientTransportBase):
         self.fd.close()
 
     def closed(self):
-        if self.terminated is False:
-            debug_log("Transport socket connection terminated abnormally.")
-            self.terminated = True
-            self.parent.drop_pending_calls()
-            self.sock.close()
-            self.fd.close()
-            if self.parent.error_callback is not None:
-                from freenas.dispatcher.client import ClientError
-                self.parent.error_callback(ClientError.CONNECTION_CLOSED)
+        with self.close_lock:
+            if self.terminated is False:
+                debug_log("Transport socket connection terminated abnormally.")
+                self.terminated = True
+                self.parent.drop_pending_calls()
+                self.sock.close()
+                self.fd.close()
+                if self.parent.error_callback is not None:
+                    from freenas.dispatcher.client import ClientError
+                    self.parent.error_callback(ClientError.CONNECTION_CLOSED)

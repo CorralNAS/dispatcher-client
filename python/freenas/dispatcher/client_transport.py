@@ -43,13 +43,13 @@ _debug_log_file = None
 
 if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
     from ws4py.client.geventclient import WebSocketClient
-    from gevent.lock import Lock
+    from gevent.lock import RLock
     from gevent.event import Event
     _thread_type = ClientType.GEVENT
 else:
     from ws4py.client.threadedclient import WebSocketClient
     from threading import Event
-    from threading import Lock
+    from threading import RLock
     _thread_type = ClientType.THREADED
 
 
@@ -416,7 +416,7 @@ class ClientTransportSock(ClientTransportBase):
         self.parent = None
         self.terminated = False
         self.fd = None
-        self.close_lock = Lock()
+        self.close_lock = RLock()
 
     def connect(self, url, parent, **kwargs):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

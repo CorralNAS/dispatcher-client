@@ -28,6 +28,8 @@
 
 import json
 import uuid
+from datetime import datetime
+from dateutil.parser import parse
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -35,15 +37,29 @@ class JsonEncoder(json.JSONEncoder):
         if type(obj) is uuid.UUID:
             return str(obj)
 
+        if type(obj) is datetime:
+            return {'$date': str(obj)}
+
         if hasattr(obj, '__getstate__'):
             return obj.__getstate__()
 
         return str(obj)
 
 
+def decode_hook(obj):
+    if len(obj) == 1 and '$date' in obj:
+        return parse(obj['$date'])
+
+    return obj
+
+
 def loads(s):
-    return json.loads(s)
+    return json.loads(s, object_hook=decode_hook)
 
 
-def dumps(obj):
-    return json.dumps(obj, cls=JsonEncoder)
+def dump(obj, fp, **kwargs):
+    return json.dump(obj, fp, cls=JsonEncoder, **kwargs)
+
+
+def dumps(obj, **kwargs):
+    return json.dumps(obj, cls=JsonEncoder, **kwargs)

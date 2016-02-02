@@ -33,8 +33,7 @@ import errno
 import time
 from .jsonenc import dumps, loads
 from freenas.dispatcher import rpc
-from freenas.dispatcher.spawn_thread import spawn_thread
-from freenas.dispatcher.spawn_thread import ClientType
+from freenas.utils.spawn_thread import ClientType, spawn_thread
 from freenas.dispatcher.client_transport import ClientTransportBuilder
 from freenas.utils.query import matches
 from ws4py.compat import urlsplit

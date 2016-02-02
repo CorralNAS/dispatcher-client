@@ -31,8 +31,7 @@ import errno
 import paramiko
 import socket
 import time
-from freenas.dispatcher.spawn_thread import spawn_thread
-from freenas.dispatcher.spawn_thread import ClientType
+from freenas.utils.spawn_thread import ClientType, spawn_thread
 from abc import ABCMeta, abstractmethod
 from six import with_metaclass
 import struct

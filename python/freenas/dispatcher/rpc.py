@@ -41,6 +41,7 @@ class RpcContext(object):
         self.services = {}
         self.instances = {}
         self.schema_definitions = {}
+        self.streaming_enabled = False
         self.register_service('discovery', DiscoveryService)
 
     def register_service(self, name, clazz):
@@ -133,13 +134,17 @@ class RpcContext(object):
                 result = func(**args)
             elif type(args) is list:
                 result = func(*args)
+
+            if hasattr(func, 'generator') and func.generator:
+                if self.streaming_enabled:
+                    result = RpcStreamingResponse(result)
+                else:
+                    result = list(result)
+
         except RpcException:
             raise
         except Exception:
             raise RpcException(errno.EFAULT, traceback.format_exc())
-
-        if inspect.isgenerator(result):
-            result = list(result)
 
         self.instances[service].sender = None
         return result
@@ -206,6 +211,22 @@ class RpcService(object):
             methods.append(result)
 
         return methods
+
+
+class RpcStreamingResponse(object):
+    def __init__(self, it):
+        self.generator = it
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            return next(self.generator)
+        except StopIteration:
+            raise StopIteration()
+        except BaseException:
+            raise RpcException(errno.EFAULT, traceback.format_exc())
 
 
 class RpcException(Exception):
@@ -428,4 +449,9 @@ def pass_sender(fn):
 
 def private(fn):
     fn.private = True
+    return fn
+
+
+def generator(fn):
+    fn.generator = True
     return fn

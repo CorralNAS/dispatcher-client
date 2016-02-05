@@ -32,6 +32,7 @@ import six
 import sys
 import traceback
 from freenas.dispatcher import validator
+from freenas.utils import iter_chunked
 from jsonschema import RefResolver
 
 
@@ -42,6 +43,7 @@ class RpcContext(object):
         self.instances = {}
         self.schema_definitions = {}
         self.streaming_enabled = False
+        self.streaming_burst = 1
         self.register_service('discovery', DiscoveryService)
 
     def register_service(self, name, clazz):
@@ -137,7 +139,7 @@ class RpcContext(object):
 
             if hasattr(func, 'generator') and func.generator:
                 if self.streaming_enabled:
-                    result = RpcStreamingResponse(result)
+                    result = RpcStreamingResponse(iter_chunked(result, self.streaming_burst))
                 else:
                     result = list(result)
 

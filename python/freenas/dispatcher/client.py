@@ -341,9 +341,12 @@ class Client(object):
                     call = self.pending_calls[msg['id']]
                     if call.streaming:
                         for i in msg['args']:
-                            call.queue.put(msg['args'])
+                            call.queue.put(i)
                     else:
-                        call.result.extend(msg['args'])
+                        if call.result is None:
+                            call.result = []
+
+                        call.result += msg['args']
 
                     if call.streaming and call.callback:
                         call.callback(msg['args'])
@@ -355,7 +358,10 @@ class Client(object):
                         call.queue.put(None)
 
                     if call.callback:
-                        call.calback(None)
+                        if call.streaming:
+                            call.callback(None)
+                        else:
+                            call.callback(call.result)
 
                     call.completed.set()
                     del self.pending_calls[str(call.id)]
@@ -480,9 +486,10 @@ class Client(object):
 
         self.call_sync('plugin.unregister_schema', name)
 
-    def call_async(self, name, callback, *args):
+    def call_async(self, name, callback, *args, **kwargs):
         call = self.PendingCall(uuid.uuid4(), name, args)
         call.callback = callback
+        call.streaming = kwargs.pop('streaming', False)
         self.pending_calls[str(call.id)] = call
         self.__call(call)
         return call

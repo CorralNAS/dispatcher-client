@@ -82,6 +82,9 @@ class EntitySubscriber(object):
             return
 
     def __add(self, items, event=True):
+        if items is None:
+            return
+
         if isinstance(items, RpcException):
             if callable(self.on_error):
                 self.on_error(items)
@@ -126,7 +129,8 @@ class EntitySubscriber(object):
         self.client.call_async(
             '{0}.query'.format(self.name),
             lambda x: self.__add(x, False), [],
-            {'limit': self.items.maxsize}
+            {'limit': self.items.maxsize},
+            streaming=True
         )
 
         self.event_handler = self.client.register_event_handler(

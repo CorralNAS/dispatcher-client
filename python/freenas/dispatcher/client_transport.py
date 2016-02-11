@@ -483,7 +483,7 @@ class ClientTransportSock(ClientTransportBase):
                 self.parent.recv(message)
 
     def close(self):
-        debug_log("Connect failed.")
+        debug_log("Disconnected.")
         self.terminated = True
         self.sock.close()
         self.fd.close()

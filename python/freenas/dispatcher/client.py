@@ -388,6 +388,7 @@ class Client(object):
 
     def disconnect(self):
         debug_log('Closing connection, local address {0}', self.transport.address)
+        self.drop_pending_calls()
         self.transport.close()
 
     def enable_server(self):

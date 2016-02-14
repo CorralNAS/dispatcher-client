@@ -454,12 +454,17 @@ class ClientTransportSock(ClientTransportBase):
 
     def send(self, message):
         if self.terminated is False:
-            header = struct.pack('II', 0xdeadbeef, len(message))
-            message = header + message.encode('utf-8')
-            sent = self.fd.write(message)
-            self.fd.flush()
-            if sent == 0:
-                self.closed()
+            try:
+                header = struct.pack('II', 0xdeadbeef, len(message))
+                message = header + message.encode('utf-8')
+                sent = self.fd.write(message)
+                if not sent:
+                    self.sock.shutdown(socket.SHUT_RDWR)
+                    return
+
+                self.fd.flush()
+            except OSError:
+                self.sock.shutdown(socket.SHUT_RDWR)
             else:
                 debug_log("Sent data: {0}", message)
 

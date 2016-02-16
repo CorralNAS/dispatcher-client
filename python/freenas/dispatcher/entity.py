@@ -33,7 +33,9 @@ from freenas.dispatcher.rpc import RpcException
 
 if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
     from gevent.queue import Queue
+    from gevent.event import Event
 else:
+    from threading import Event
     try:
         from queue import Queue
     except ImportError:
@@ -62,6 +64,7 @@ class EntitySubscriber(object):
         self.on_delete = None
         self.on_error = None
         self.remote = False
+        self.ready = Event()
         self.listeners = {}
 
     def __on_changed(self, args, event=True):
@@ -123,9 +126,13 @@ class EntitySubscriber(object):
         return len(self.items)
 
     def start(self):
+        def callback(result):
+            self.__add(result, False)
+            self.ready.set()
+
         self.client.call_async(
             '{0}.query'.format(self.name),
-            lambda x: self.__add(x, False), [],
+            callback, [],
             {'limit': self.items.maxsize}
         )
 
@@ -170,3 +177,6 @@ class EntitySubscriber(object):
             except GeneratorExit:
                 self.listeners[id].remove(q)
                 raise StopIteration
+
+    def wait_ready(self, timeout=None):
+        self.ready.wait(timeout)

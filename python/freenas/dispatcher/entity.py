@@ -34,8 +34,10 @@ from freenas.dispatcher.rpc import RpcException
 if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
     from gevent.queue import Queue
     from gevent.event import Event
+    from gevent import sleep
 else:
     from threading import Event
+    from time import sleep
     try:
         from queue import Queue
     except ImportError:
@@ -152,6 +154,13 @@ class EntitySubscriber(object):
             return wrap(self.client.call_sync('{0}.query'.format(self.name), filter, params))
 
         return wrap(list(self.items.values())).query(*filter, **params)
+
+    def get(self, id, timeout=None):
+        val = self.items.get(id)
+        if val is not None or timeout is None:
+            return val
+        sleep(timeout)
+        return self.items.get(id)
 
     def viewport(self, *filter, **params):
         return wrap(list(self.items.values())).query(*filter, **params)

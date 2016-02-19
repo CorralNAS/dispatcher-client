@@ -405,9 +405,9 @@ def accepts(*sch):
     return wrapped
 
 
-def returns(*sch):
+def returns(sch):
     def wrapped(fn):
-        fn.result_schema = list(map(convert_schema, sch))
+        fn.result_schema = convert_schema(sch)
         return fn
 
     return wrapped

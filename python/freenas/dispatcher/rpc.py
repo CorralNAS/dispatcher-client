@@ -31,6 +31,8 @@ import logging
 import six
 import sys
 import traceback
+import hashlib
+import json
 from freenas.dispatcher import validator
 from jsonschema import RefResolver
 
@@ -306,6 +308,11 @@ class DiscoveryService(RpcService):
             'type': 'object',
             'definitions': self.__context.schema_definitions
         }
+
+    def get_schema_hash(self):
+        h = hashlib.sha256()
+        h.update(json.dumps(self.get_schema()).encode('utf-8'))
+        return h.hexdigest()
 
 
 class SchemaHelper(object):

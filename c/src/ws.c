@@ -39,6 +39,8 @@
 #include <regex.h>
 #include <pthread.h>
 #include <jansson.h>
+
+#include "utils.h"
 #include "ws.h"
 
 #define LINEMAX 1024
@@ -48,70 +50,11 @@
 #define htonll(x)   htonl((uint32_t)x)
 #endif
 
-static void *xmalloc(size_t nbytes);
-static ssize_t xread(int fd, void *buf, size_t nbytes);
-static ssize_t xwrite(int fd, void *buf, size_t nbytes);
 static char *xsubstrdup(char *str, int start, int end);
 static int ws_handshake(ws_conn_t *conn);
 static int http_parse_uri(ws_conn_t *conn, char *uri);
 static void ws_mask(char *buf, size_t len, uint32_t key);
 static void *ws_event_loop(void *arg);
-
-static void *
-xmalloc(size_t nbytes)
-{
-    void *ptr = malloc(nbytes);
-    memset(ptr, 0, nbytes);
-    return ptr;
-}
-
-static ssize_t
-xread(int fd, void *buf, size_t nbytes)
-{
-    ssize_t ret, done = 0;
-
-    while (done < nbytes) {
-        ret = read(fd, (void *)(buf + done), nbytes - done);
-        if (ret < 0) {
-            if (errno == EINTR || errno == EAGAIN)
-                continue;
-
-            return (-1);
-        }
-
-        done += ret;
-    }
-
-    return (done);
-}
-
-static ssize_t
-xwrite(int fd, void *buf, size_t nbytes)
-{
-    ssize_t ret, done = 0;
-
-    while (done < nbytes) {
-        ret = write(fd, (void *)(buf + done), nbytes - done);
-        if (ret < 0) {
-            if (errno == EINTR || errno == EAGAIN)
-                continue;
-
-            return (-1);
-        }
-
-        done += ret;
-    }
-
-    return (done);
-}
-
-char *xfgetln(FILE *f)
-{
-    size_t nbytes = LINEMAX;
-    char *buf = xmalloc(nbytes + 1);
-    getline(&buf, &nbytes, f);
-    return buf;
-}
 
 static char *
 xsubstrdup(char *str, int start, int end)
@@ -194,7 +137,6 @@ ws_connect(const char *uri)
 fail:
     free(conn);
     return (NULL);
-
 }
 
 static int
@@ -268,12 +210,14 @@ void
 ws_close(ws_conn_t *conn)
 {
     shutdown(conn->ws_fd, SHUT_RDWR);
+    close(conn->ws_fd);
 
     free(conn->ws_uri);
     free(conn->ws_host);
     free(conn->ws_port);
     free(conn->ws_path);
     freeaddrinfo(conn->ws_addrinfo);
+    free(conn);
 }
 
 int

@@ -44,6 +44,7 @@
 #endif
 
 #include "ws.h"
+#include "unix.h"
 #include "dispatcher.h"
 
 struct rpc_call
@@ -64,6 +65,7 @@ struct rpc_call
 struct connection
 {
     const char *        conn_uri;
+    unix_conn_t *       conn_unix;
     ws_conn_t *         conn_ws;
     error_callback_t *  conn_error_handler;
     void *              conn_error_handler_arg;
@@ -78,7 +80,7 @@ static json_t *dispatcher_new_id();
 static int dispatcher_call_internal(connection_t *conn, const char *type, struct rpc_call *call);
 static json_t *dispatcher_pack_msg(const char *ns, const char *name, json_t *id, json_t *args);
 static int dispatcher_send_msg(connection_t *conn, json_t *msg);
-static void dispatcher_process_msg(ws_conn_t *conn, void *frame, size_t len, void *arg);
+static void dispatcher_process_msg(void *conn, void *frame, size_t len, void *arg);
 static void dispatcher_process_rpc(connection_t *conn, json_t *msg);
 static void dispatcher_process_events(connection_t *conn, json_t *msg);
 
@@ -87,23 +89,34 @@ dispatcher_open(const char *hostname)
 {
     char *uri;
 
-    asprintf(&uri, "http://%s:5000/socket", hostname);
     connection_t *conn = malloc(sizeof(connection_t));
     TAILQ_INIT(&conn->conn_calls);
 
-    conn->conn_ws = ws_connect(uri);
-    if (conn->conn_ws == NULL) {
-        free(conn);
-        return (NULL);
+    if (strncmp(hostname, "unix", sizeof("unix")) == 0) {
+        conn->conn_unix = unix_connect("/var/run/dispatcher.sock");
+        if (conn->conn_unix == NULL) {
+            free(conn);
+            return (NULL);
+        }
+
+        conn->conn_unix->unix_message_handler = dispatcher_process_msg;
+        conn->conn_unix->unix_message_handler_arg = conn;
+    } else {
+        asprintf(&uri, "http://%s:5000/socket", hostname);
+        conn->conn_ws = ws_connect(uri);
+        if (conn->conn_ws == NULL) {
+            free(conn);
+            return (NULL);
+        }
+
+        conn->conn_ws->ws_message_handler = dispatcher_process_msg;
+        conn->conn_ws->ws_message_handler_arg = conn;
+        free(uri);
     }
 
-    conn->conn_ws->ws_message_handler = dispatcher_process_msg;
-    conn->conn_ws->ws_message_handler_arg = conn;
-
-    if (conn->conn_ws == NULL)
+    if (conn->conn_ws == NULL && conn->conn_unix == NULL)
         return (NULL);
 
-    free(uri);
     return (conn);
 }
 
@@ -111,7 +124,12 @@ void
 dispatcher_close(connection_t *conn)
 {
     rpc_call_t *call, *tmp;
-    ws_close(conn->conn_ws);
+
+    if (conn->conn_ws != NULL)
+        ws_close(conn->conn_ws);
+
+    if (conn->conn_unix != NULL)
+        unix_close(conn->conn_unix)
 
     TAILQ_FOREACH_SAFE(call, &conn->conn_calls, rc_link, tmp) {
         json_decref(call->rc_args);
@@ -128,7 +146,13 @@ dispatcher_close(connection_t *conn)
 int
 dispatcher_get_fd(connection_t *conn)
 {
-    return ws_get_fd(conn->conn_ws);
+    if (conn->conn_ws != NULL)
+        return ws_get_fd(conn->conn_ws);
+
+    if (conn->conn_unix != NULL)
+        return unix_get_fd(conn->conn_unix);
+
+    return (-1);
 }
 
 int
@@ -281,11 +305,18 @@ static int
 dispatcher_send_msg(connection_t *conn, json_t *msg)
 {
     char *str = json_dumps(msg, 0);
-    return (ws_send_msg(conn->conn_ws, str, strlen(str), WS_TEXT));
+
+    if (conn->conn_ws != NULL)
+        return (ws_send_msg(conn->conn_ws, str, strlen(str), WS_TEXT));
+
+    if (conn->conn_unix != NULL)
+        return (unix_send_msg(conn->conn_unix, str, strlen(str)));
+
+    return (-1);
 }
 
 static void
-dispatcher_process_msg(ws_conn_t *ws, void *frame, size_t len, void *arg)
+dispatcher_process_msg(void *ctx __unused, void *frame, size_t len, void *arg)
 {
     connection_t *conn = (connection_t *)arg;
     json_t *msg;

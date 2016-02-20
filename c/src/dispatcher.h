@@ -70,4 +70,5 @@ void rpc_call_wait(rpc_call_t *);
 int rpc_call_success(rpc_call_t *);
 json_t *rpc_call_result(rpc_call_t *);
 void rpc_call_free(rpc_call_t *);
+
 #endif

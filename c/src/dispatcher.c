@@ -99,7 +99,8 @@ dispatcher_open(const char *hostname)
             return (NULL);
         }
 
-        conn->conn_unix->unix_message_handler = dispatcher_process_msg;
+        conn->conn_unix->unix_message_handler =
+            (unix_message_handler_t)dispatcher_process_msg;
         conn->conn_unix->unix_message_handler_arg = conn;
     } else {
         asprintf(&uri, "http://%s:5000/socket", hostname);
@@ -109,7 +110,8 @@ dispatcher_open(const char *hostname)
             return (NULL);
         }
 
-        conn->conn_ws->ws_message_handler = dispatcher_process_msg;
+        conn->conn_ws->ws_message_handler =
+            (ws_message_handler_t)dispatcher_process_msg;
         conn->conn_ws->ws_message_handler_arg = conn;
         free(uri);
     }
@@ -129,7 +131,7 @@ dispatcher_close(connection_t *conn)
         ws_close(conn->conn_ws);
 
     if (conn->conn_unix != NULL)
-        unix_close(conn->conn_unix)
+        unix_close(conn->conn_unix);
 
     TAILQ_FOREACH_SAFE(call, &conn->conn_calls, rc_link, tmp) {
         json_decref(call->rc_args);

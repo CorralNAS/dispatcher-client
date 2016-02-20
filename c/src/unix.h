@@ -31,12 +31,15 @@
 #include <stdint.h>
 #include <pthread.h>
 
+struct unix_conn;
+typedef void (*unix_message_handler_t)(struct unix_conn *, void *, size_t, void *);
+
 typedef struct unix_conn
 {
     int unix_fd;
     char *unix_path;
     pthread_t unix_thread;
-    void (*unix_message_handler)(struct unix_conn *conn, void *msg, size_t len, void *arg);
+    unix_message_handler_t unix_message_handler;
     void *unix_message_handler_arg;
 } unix_conn_t;
 

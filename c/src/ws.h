@@ -42,6 +42,9 @@
 #define WS_PAYLOAD_LEN(x)   ((x & 0x7f) << 8)
 #define WS_PAYLOAD_GET_LEN(x) ((x >> 8) & 0x7f)
 
+struct ws_conn;
+typedef void (*ws_message_handler_t)(struct ws_conn *, void *, size_t, void *);
+
 typedef struct ws_conn
 {
     int ws_fd;
@@ -52,7 +55,7 @@ typedef struct ws_conn
     struct addrinfo *ws_addrinfo;
     pthread_t ws_thread;
     json_t *ws_headers;
-    void (*ws_message_handler)(struct ws_conn *conn, void *msg, size_t len, void *arg);
+     ws_message_handler_t ws_message_handler;
     void *ws_message_handler_arg;
 } ws_conn_t;
 

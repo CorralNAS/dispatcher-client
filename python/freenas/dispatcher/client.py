@@ -200,15 +200,13 @@ class Client(object):
         self.decode(msg)
 
     def __process_event(self, name, args):
-        self.event_distribution_lock.acquire()
-        if name in self.event_handlers:
-            for h in self.event_handlers[name]:
-                h(args)
+        with self.event_distribution_lock:
+            if name in self.event_handlers:
+                for h in self.event_handlers[name]:
+                    h(args)
 
-        if self.event_callback:
-            self.event_callback(name, args)
-
-        self.event_distribution_lock.release()
+            if self.event_callback:
+                self.event_callback(name, args)
 
     def __event_emitter(self):
         while True:
@@ -495,38 +493,34 @@ class Client(object):
     def exec_and_wait_for_event(self, event, match_fn, fn, timeout=None):
         done = Event()
         self.subscribe_events(event)
-        self.event_distribution_lock.acquire()
+        with self.event_distribution_lock:
+            try:
+                fn()
+            except:
+                raise
 
-        try:
-            fn()
-        except:
-            self.event_distribution_lock.release()
-            raise
+            def handler(args):
+                if match_fn(args):
+                    done.set()
 
-        def handler(args):
-            if match_fn(args):
-                done.set()
+            self.register_event_handler(event, handler)
 
-        self.register_event_handler(event, handler)
-        self.event_distribution_lock.release()
         done.wait(timeout=timeout)
         self.unregister_event_handler(event, handler)
 
     def test_or_wait_for_event(self, event, match_fn, initial_condition_fn, timeout=None):
         done = Event()
         self.subscribe_events(event)
-        self.event_distribution_lock.acquire()
+        with self.event_distribution_lock:
+            if initial_condition_fn():
+                return
 
-        if initial_condition_fn():
-            self.event_distribution_lock.release()
-            return
+            def handler(args):
+                if match_fn(args):
+                    done.set()
 
-        def handler(args):
-            if match_fn(args):
-                done.set()
+            self.register_event_handler(event, handler)
 
-        self.register_event_handler(event, handler)
-        self.event_distribution_lock.release()
         done.wait(timeout=timeout)
         self.unregister_event_handler(event, handler)
 

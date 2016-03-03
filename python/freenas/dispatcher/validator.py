@@ -25,7 +25,7 @@
 #
 #####################################################################
 
-
+import errno
 from jsonschema import Draft4Validator, validators
 from jsonschema.exceptions import ValidationError
 from freenas.utils import first_or_default, exclude
@@ -36,8 +36,9 @@ import six
 def serialize_errors(errors):
     for i in errors:
         yield {
+            'path': list(i.path),
             'message': i.message,
-            'path': list(i.path)
+            'code': errno.EINVAL
         }
 
 

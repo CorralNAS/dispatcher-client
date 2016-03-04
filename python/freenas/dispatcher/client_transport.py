@@ -463,7 +463,7 @@ class ClientTransportSock(ClientTransportBase):
                     return
 
                 self.fd.flush()
-            except OSError:
+            except (OSError, ValueError):
                 self.sock.shutdown(socket.SHUT_RDWR)
             else:
                 debug_log("Sent data: {0}", message)
@@ -489,8 +489,12 @@ class ClientTransportSock(ClientTransportBase):
             except OSError:
                 break
 
-        self.sock.close()
-        self.fd.close()
+        try:
+            self.sock.close()
+            self.fd.close()
+        except OSError:
+            pass
+
         if self.terminated is False:
             self.closed()
 

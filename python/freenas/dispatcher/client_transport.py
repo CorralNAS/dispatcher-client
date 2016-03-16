@@ -32,6 +32,7 @@ import errno
 import paramiko
 import socket
 import time
+from freenas.utils import xrecvmsg, xsendmsg
 from freenas.utils.spawn_thread import ClientType, spawn_thread
 from abc import ABCMeta, abstractmethod
 from six import with_metaclass
@@ -412,6 +413,7 @@ class ClientTransportSock(ClientTransportBase):
         self.terminated = False
         self.fd = None
         self.close_lock = RLock()
+        self.wlock = RLock()
 
     def connect(self, url, parent, **kwargs):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -454,16 +456,13 @@ class ClientTransportSock(ClientTransportBase):
                 header = struct.pack('II', 0xdeadbeef, len(message))
                 message = message.encode('utf-8')
 
-                self.sock.sendmsg([header])
-                sent = self.sock.sendmsg([message], [
-                    (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', fds))
-                ])
+                with self.wlock:
+                    xsendmsg(self.sock, header)
+                    xsendmsg(self.sock, message, [
+                        (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', fds))
+                    ])
 
-                if not sent:
-                    self.sock.shutdown(socket.SHUT_RDWR)
-                    return
-
-                self.fd.flush()
+                    self.fd.flush()
             except (OSError, ValueError):
                 self.sock.shutdown(socket.SHUT_RDWR)
             else:
@@ -473,16 +472,16 @@ class ClientTransportSock(ClientTransportBase):
         while self.terminated is False:
             try:
                 fds = array.array('i')
-                header, _, _, _ = self.sock.recvmsg(8)
+                header, _ = xrecvmsg(self.sock, 8)
                 if header == b'' or len(header) != 8:
                     break
 
                 magic, length = struct.unpack('II', header)
                 if magic != 0xdeadbeef:
-                    debug_log('Message with wrong magic dropped')
+                    debug_log('Message with wrong magic dropped (magic {0:x})'.format(magic))
                     continue
 
-                message, ancdata, flags, addr = self.sock.recvmsg(length, socket.CMSG_LEN(MAXFDS * fds.itemsize))
+                message, ancdata, = xrecvmsg(self.sock, length, socket.CMSG_LEN(MAXFDS * fds.itemsize))
                 if message == b'' or len(message) != length:
                     break
                 else:

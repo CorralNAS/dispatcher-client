@@ -79,12 +79,23 @@ def debug_log(message, *args):
         _debug_log_file.flush()
 
 
+class FileDescriptor(object):
+    def __init__(self, fd=None):
+        self.fd = fd
+
+    def __str__(self):
+        return "<FileDescriptor fd={0}>".format(self.fd)
+
+    def __repr__(self):
+        return str(self)
+
+
 class Client(object):
     class PendingCall(object):
         def __init__(self, id, method, args=None):
             self.id = id
             self.method = method
-            self.args = args
+            self.args = list(args) if args is not None else None
             self.result = None
             self.error = None
             self.completed = Event()
@@ -125,12 +136,13 @@ class Client(object):
         self.event_thread = None
 
     def __pack(self, namespace, name, args, id=None):
+        fds = list(self.__collect_fds(args))
         return dumps({
             'namespace': namespace,
             'name': name,
             'args': args,
             'id': str(id if id is not None else uuid.uuid4())
-        })
+        }), fds
 
     def __call_timeout(self, call):
         pass
@@ -144,7 +156,7 @@ class Client(object):
         else:
             payload = custom_payload
 
-        self.__send(self.__pack(
+        self.__send(*self.__pack(
             'rpc',
             call_type,
             payload,
@@ -152,7 +164,7 @@ class Client(object):
         ))
 
     def __send_event(self, name, params):
-        self.__send(self.__pack(
+        self.__send(*self.__pack(
             'events',
             'event',
             {'name': name, 'args': params}
@@ -160,7 +172,7 @@ class Client(object):
 
     def __send_event_burst(self):
         with self.event_emission_lock:
-            self.__send(self.__pack(
+            self.__send(*self.__pack(
                 'events',
                 'event_burst',
                 {'events': list([{'name': t[0], 'args': t[1]} for t in self.pending_events])},
@@ -177,16 +189,20 @@ class Client(object):
         if extra is not None:
             payload.update(extra)
 
-        self.__send(self.__pack('rpc', 'error', id=id, args=payload))
+        self.__send(*self.__pack('rpc', 'error', id=id, args=payload))
 
     def __send_response(self, id, resp):
-        self.__send(self.__pack('rpc', 'response', id=id, args=resp))
+        self.__send(*self.__pack('rpc', 'response', id=id, args=resp))
 
-    def __send(self, data):
-        debug_log('<- {0}', data)
-        self.transport.send(data)
+    def __send(self, data, fds=None):
+        if not fds:
+            fds = []
 
-    def recv(self, message):
+        debug_log('<- {0} [{1}', data, fds)
+        print(data, fds)
+        self.transport.send(data, [i.fd for i in fds])
+
+    def recv(self, message, fds):
         if isinstance(message, bytes):
             message = message.decode('utf-8')
         debug_log('-> {0}', message)
@@ -197,7 +213,7 @@ class Client(object):
                 self.error_callback(ClientError.INVALID_JSON_RESPONSE, err)
             return
 
-        self.decode(msg)
+        self.decode(msg, fds)
 
     def __process_event(self, name, args):
         with self.event_distribution_lock:
@@ -216,6 +232,44 @@ class Client(object):
                 time.sleep(0.1)
                 with self.event_emission_lock:
                     self.__send_event_burst()
+
+    def __collect_fds(self, obj, start=0):
+        idx = start
+
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                if isinstance(v, FileDescriptor):
+                    obj[k] = {'$fd': idx}
+                    idx += 1
+                    yield v
+                else:
+                    for x in self.__collect_fds(v, idx):
+                        yield x
+
+        if isinstance(obj, (list, tuple)):
+            for i, o in enumerate(obj):
+                if isinstance(o, FileDescriptor):
+                    obj[i] = {'$fd': idx}
+                    idx += 1
+                    yield o
+                else:
+                    for x in self.__collect_fds(o, idx):
+                        yield x
+
+    def __replace_fds(self, obj, fds):
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                if isinstance(v, dict) and len(v) == 1 and '$fd' in v:
+                    obj[k] = FileDescriptor(fds[v['$fd']]) if v['$fd'] < len(fds) else None
+                else:
+                    self.__replace_fds(v, fds)
+
+        if isinstance(obj, list):
+            for i, o in enumerate(obj):
+                if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
+                    obj[i] = FileDescriptor(fds[o['$fd']]) if o['$fd'] < len(fds) else None
+                else:
+                    self.__replace_fds(o, fds)
 
     def wait_forever(self):
         if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
@@ -247,7 +301,9 @@ class Client(object):
             call.completed.set()
             del self.pending_calls[key]
 
-    def decode(self, msg):
+    def decode(self, msg, fds):
+        self.__replace_fds(msg, fds)
+
         if 'namespace' not in msg:
             self.error_callback(ClientError.INVALID_JSON_RESPONSE)
             return

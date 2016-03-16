@@ -26,6 +26,7 @@
 #####################################################################
 
 from __future__ import print_function
+import array
 import os
 import errno
 import paramiko
@@ -37,6 +38,7 @@ from six import with_metaclass
 import struct
 
 
+MAXFDS = 128
 _debug_log_file = None
 
 
@@ -66,14 +68,8 @@ def debug_log(message, *args):
         _debug_log_file.flush()
 
 
-def _patched_exec_command(self,
-                          command,
-                          bufsize=-1,
-                          timeout=None,
-                          get_pty=False,
-                          stdin_binary=True,
-                          stdout_binary=False,
-                          stderr_binary=False):
+def _patched_exec_command(self, command, bufsize=-1, timeout=None, get_pty=False, stdin_binary=True,
+                          stdout_binary=False, stderr_binary=False):
 
     chan = self._transport.open_session()
     if get_pty:
@@ -112,7 +108,7 @@ class ClientTransportBase(with_metaclass(ABCMeta, object)):
         return
 
     @abstractmethod
-    def send(self, message):
+    def send(self, message, fds):
         return
 
     @abstractmethod
@@ -139,7 +135,7 @@ class ClientTransportWS(ClientTransportBase):
                 self.parent.parent.error_callback(ClientError.CONNECTION_CLOSED)
 
         def received_message(self, message):
-            self.parent.parent.recv(message.data)
+            self.parent.parent.recv(message.data, None)
 
     def __init__(self):
         self.parent = None
@@ -197,7 +193,7 @@ class ClientTransportWS(ClientTransportBase):
     def address(self):
         return self.ws.local_address
 
-    def send(self, message):
+    def send(self, message, fds):
         try:
             self.ws.send(message)
         except OSError as err:
@@ -354,7 +350,7 @@ class ClientTransportSSH(ClientTransportBase):
         recv_t = spawn_thread(target=self.recv, daemon=True)
         recv_t.start()
 
-    def send(self, message):
+    def send(self, message, fds):
         if self.terminated is False:
             header = struct.pack('II', 0xdeadbeef, len(message))
             message = header + message.encode('utf-8')
@@ -382,7 +378,7 @@ class ClientTransportSSH(ClientTransportBase):
                 self.closed()
             else:
                 debug_log("Received data: {0}", message)
-                self.parent.recv(message)
+                self.parent.recv(message, None)
 
     def closed(self):
         debug_log("Transport connection has been closed abnormally.")
@@ -452,12 +448,17 @@ class ClientTransportSock(ClientTransportBase):
     def address(self):
         return self.path
 
-    def send(self, message):
+    def send(self, message, fds):
         if self.terminated is False:
             try:
                 header = struct.pack('II', 0xdeadbeef, len(message))
-                message = header + message.encode('utf-8')
-                sent = self.fd.write(message)
+                message = message.encode('utf-8')
+
+                self.sock.sendmsg([header])
+                sent = self.sock.sendmsg([message], [
+                    (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', fds))
+                ])
+
                 if not sent:
                     self.sock.shutdown(socket.SHUT_RDWR)
                     return
@@ -471,7 +472,8 @@ class ClientTransportSock(ClientTransportBase):
     def recv(self):
         while self.terminated is False:
             try:
-                header = self.fd.read(8)
+                fds = array.array('i')
+                header, _, _, _ = self.sock.recvmsg(8)
                 if header == b'' or len(header) != 8:
                     break
 
@@ -480,12 +482,16 @@ class ClientTransportSock(ClientTransportBase):
                     debug_log('Message with wrong magic dropped')
                     continue
 
-                message = self.fd.read(length)
+                message, ancdata, flags, addr = self.sock.recvmsg(length, socket.CMSG_LEN(MAXFDS * fds.itemsize))
                 if message == b'' or len(message) != length:
                     break
                 else:
                     debug_log("Received data: {0}", message)
-                    self.parent.recv(message)
+                    for cmsg_level, cmsg_type, cmsg_data in ancdata:
+                        if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS:
+                            fds.fromstring(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
+
+                    self.parent.recv(message, fds)
             except OSError:
                 break
 

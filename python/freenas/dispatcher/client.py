@@ -199,7 +199,6 @@ class Client(object):
             fds = []
 
         debug_log('<- {0} [{1}', data, fds)
-        print(data, fds)
         self.transport.send(data, [i.fd for i in fds])
 
     def recv(self, message, fds):

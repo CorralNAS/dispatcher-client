@@ -457,10 +457,10 @@ class Client(object):
         self.error_callback = callback
 
     def subscribe_events(self, *masks):
-        self.__send(self.__pack('events', 'subscribe', masks))
+        self.__send(*self.__pack('events', 'subscribe', masks))
 
     def unsubscribe_events(self, *masks):
-        self.__send(self.__pack('events', 'unsubscribe', masks))
+        self.__send(*self.__pack('events', 'unsubscribe', masks))
 
     def register_service(self, name, impl):
         if self.rpc is None:

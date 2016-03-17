@@ -80,8 +80,9 @@ def debug_log(message, *args):
 
 
 class FileDescriptor(object):
-    def __init__(self, fd=None):
+    def __init__(self, fd=None, close=True):
         self.fd = fd
+        self.close = True
 
     def __str__(self):
         return "<FileDescriptor fd={0}>".format(self.fd)

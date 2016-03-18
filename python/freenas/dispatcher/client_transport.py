@@ -32,6 +32,7 @@ import errno
 import paramiko
 import socket
 import time
+import logging
 from freenas.utils import xrecvmsg, xsendmsg
 from freenas.utils.spawn_thread import ClientType, spawn_thread
 from abc import ABCMeta, abstractmethod
@@ -293,6 +294,7 @@ class ClientTransportSSH(ClientTransportBase):
 
         try:
             self.ssh = paramiko.SSHClient()
+            logging.getLogger("paramiko").setLevel(logging.WARNING)
             if self.host_key_file:
                 try:
                     self.ssh.load_host_keys(self.host_key_file)

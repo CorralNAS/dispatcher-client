@@ -200,7 +200,7 @@ class Client(object):
             fds = []
 
         debug_log('<- {0} [{1}', data, fds)
-        self.transport.send(data, [i.fd for i in fds])
+        self.transport.send(data, fds)
 
     def recv(self, message, fds):
         if isinstance(message, bytes):
@@ -520,12 +520,12 @@ class Client(object):
         return call.result
 
     def call_task_sync(self, name, *args):
-        tid = self.call_sync('task.submit', name, args)
+        tid = self.call_sync('task.submit', name, list(args))
         self.call_sync('task.wait', tid, timeout=3600)
         return self.call_sync('task.status', tid)
 
     def submit_task(self, name, *args):
-        return self.call_sync('task.submit', name, args)
+        return self.call_sync('task.submit', name, list(args))
 
     def emit_event(self, name, params):
         if not self.use_bursts:

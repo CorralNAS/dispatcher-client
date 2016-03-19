@@ -461,8 +461,12 @@ class ClientTransportSock(ClientTransportBase):
                 with self.wlock:
                     xsendmsg(self.sock, header)
                     xsendmsg(self.sock, message, [
-                        (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', fds))
+                        (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds]))
                     ])
+
+                    for i in fds:
+                        if i.close:
+                            os.close(i.fd)
 
                     self.fd.flush()
             except (OSError, ValueError):

@@ -309,7 +309,7 @@ class ClientTransportSSH(ClientTransportBase):
                     raise ValueError('Hostname field of host key is not specified.')
                 if not key:
                     raise ValueError('Key field of host key is not specified.')
-                if key_type is not "ssh-rsa" or key_type is not "ssh-dss":
+                if key_type != "ssh-rsa" and key_type != "ssh-dss":
                     raise ValueError('Key_type field of host key must be either ssh-rsa or ssh-dss.')
                 self.ssh._host_keys.add(key_hostname, key_type, key)
             else:

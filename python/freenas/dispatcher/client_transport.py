@@ -295,10 +295,11 @@ class ClientTransportSSH(ClientTransportBase):
         try:
             self.ssh = paramiko.SSHClient()
             logging.getLogger("paramiko").setLevel(logging.WARNING)
+            if self.host_key or self.host_key_file:
+                self.look_for_keys = False
             if self.host_key_file:
                 try:
                     self.ssh.load_host_keys(self.host_key_file)
-                    self.look_for_keys = False
                 except IOError:
                     debug_log('Cannot read host key file: {0}. SSH transport is closing.', self.host_key_file)
                     self.close()

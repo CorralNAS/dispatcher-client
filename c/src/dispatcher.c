@@ -89,7 +89,7 @@ dispatcher_open(const char *hostname)
 {
     char *uri;
 
-    connection_t *conn = malloc(sizeof(connection_t));
+    connection_t *conn = calloc(1, sizeof(connection_t));
     TAILQ_INIT(&conn->conn_calls);
 
     if (strncmp(hostname, "unix", sizeof("unix")) == 0) {

@@ -41,6 +41,7 @@ import struct
 
 
 MAXFDS = 128
+CMSGCRED_SIZE = struct.calcsize('iiiih16i')
 _debug_log_file = None
 
 
@@ -448,6 +449,7 @@ class ClientTransportSock(ClientTransportBase):
                 with self.wlock:
                     xsendmsg(self.sock, header)
                     xsendmsg(self.sock, message, [
+                        (socket.SOL_SOCKET, socket.SCM_CREDS, bytearray(CMSGCRED_SIZE)),
                         (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds]))
                     ])
 

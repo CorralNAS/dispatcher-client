@@ -519,10 +519,21 @@ class Client(object):
 
         return call.result
 
-    def call_task_sync(self, name, *args):
+    def call_task_sync(self, name, *args, timeout=3600):
         tid = self.call_sync('task.submit', name, list(args))
-        self.call_sync('task.wait', tid, timeout=3600)
+        self.call_sync('task.wait', tid, timeout=timeout)
         return self.call_sync('task.status', tid)
+
+    def call_task_async(self, name, *args, timeout=3600, callback=None):
+        def wait_on_complete(self, tid, timeout, callback):
+            self.call_sync('task.wait', tid, timeout=timeout)
+            if callback:
+                callback(self.call_sync('task.status', tid))
+
+        tid = self.call_sync('task.submit', name, list(args))
+        _t = spawn_thread(target=wait_on_complete, args=(self, tid, timeout, callback), daemon=True)
+        _t.start()
+        return tid
 
     def submit_task(self, name, *args):
         return self.call_sync('task.submit', name, list(args))

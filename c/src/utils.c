@@ -25,44 +25,67 @@
  *
  */
 
-#ifndef __WS_H
-#define __WS_H
+#include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <errno.h>
 
-#include <stdint.h>
-#include <pthread.h>
-#include <jansson.h>
+#define LINEMAX 1024
 
-#define WS_FIN              (1 << 7)
-#define WS_TEXT             (0x01)
-#define WS_BINARY           (0x02)
-#define WS_CLOSE            (0x08)
-#define WS_PING             (0x09)
-#define WS_PONG             (0x10)
-#define WS_MASK             (1 << 15)
-#define WS_PAYLOAD_LEN(x)   ((x & 0x7f) << 8)
-#define WS_PAYLOAD_GET_LEN(x) ((x >> 8) & 0x7f)
-
-struct ws_conn;
-typedef void (*ws_message_handler_t)(struct ws_conn *, void *, size_t, void *);
-
-typedef struct ws_conn
+void *
+xmalloc(size_t nbytes)
 {
-    int ws_fd;
-    char *ws_uri;
-    char *ws_host;
-    char *ws_path;
-    char *ws_port;
-    struct addrinfo *ws_addrinfo;
-    pthread_t ws_thread;
-    json_t *ws_headers;
-     ws_message_handler_t ws_message_handler;
-    void *ws_message_handler_arg;
-} ws_conn_t;
+    void *ptr = malloc(nbytes);
+    memset(ptr, 0, nbytes);
+    return ptr;
+}
 
-ws_conn_t *ws_connect(const char *);
-void ws_close(ws_conn_t *);
-int ws_send_msg(ws_conn_t *, void *, size_t, uint8_t);
-int ws_recv_msg(ws_conn_t *, void **, size_t *, uint8_t *);
-int ws_get_fd(ws_conn_t *);
+ssize_t
+xread(int fd, void *buf, size_t nbytes)
+{
+    ssize_t ret, done = 0;
 
-#endif  /* __WS_H */
+    while (done < nbytes) {
+        ret = read(fd, (void *)(buf + done), nbytes - done);
+        if (ret < 0) {
+            if (errno == EINTR || errno == EAGAIN)
+                continue;
+
+            return (-1);
+        }
+
+        done += ret;
+    }
+
+    return (done);
+}
+
+ssize_t
+xwrite(int fd, void *buf, size_t nbytes)
+{
+    ssize_t ret, done = 0;
+
+    while (done < nbytes) {
+        ret = write(fd, (void *)(buf + done), nbytes - done);
+        if (ret < 0) {
+            if (errno == EINTR || errno == EAGAIN)
+                continue;
+
+            return (-1);
+        }
+
+        done += ret;
+    }
+
+    return (done);
+}
+
+char *xfgetln(FILE *f)
+{
+    size_t nbytes = LINEMAX;
+    char *buf = xmalloc(nbytes + 1);
+    getline(&buf, &nbytes, f);
+    return buf;
+}

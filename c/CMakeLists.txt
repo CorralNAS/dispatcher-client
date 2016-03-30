@@ -11,7 +11,7 @@ include_directories(${JANSSON_INCLUDE_DIRS})
 link_directories(${JANSSON_LIBRARY_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_library(dispatcherclient SHARED src/ws.c src/dispatcher.c)
+add_library(dispatcherclient SHARED src/utils.c src/ws.c src/unix.c src/dispatcher.c)
 target_link_libraries(dispatcherclient ${JANSSON_LIBRARIES})
 target_link_libraries (dispatcherclient ${CMAKE_THREAD_LIBS_INIT})
 
@@ -24,3 +24,6 @@ target_link_libraries(enum dispatcherclient)
 
 add_executable(listen examples/listen.c)
 target_link_libraries(listen dispatcherclient)
+
+install(TARGETS dispatcherclient LIBRARY DESTINATION lib)
+install(FILES src/dispatcher.h DESTINATION include)

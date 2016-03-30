@@ -25,8 +25,10 @@
 #
 #####################################################################
 
-
+import errno
 from jsonschema import Draft4Validator, validators
+from jsonschema.exceptions import ValidationError
+from freenas.utils import first_or_default, exclude
 
 import six
 
@@ -34,8 +36,9 @@ import six
 def serialize_errors(errors):
     for i in errors:
         yield {
+            'path': list(i.path),
             'message': i.message,
-            'path': list(i.path)
+            'code': errno.EINVAL
         }
 
 
@@ -69,8 +72,45 @@ def extend_with_default(validator_class):
             if "default" in subschema:
                 instance.setdefault(property, subschema["default"])
 
+    def oneOf_discriminator(validator, oneOf, instance, schema):
+        subschemas = enumerate(oneOf)
+        all_errors = []
+
+        if 'discriminator' in schema:
+            discriminator = schema['discriminator']
+            if discriminator in instance:
+                subschema = first_or_default(lambda s: s['$ref'] == instance[discriminator], oneOf)
+                if subschema:
+                    for err in validator.descend(instance, subschema):
+                        yield err
+
+                return
+
+        for index, subschema in subschemas:
+            errs = list(validator.descend(instance, subschema, schema_path=index))
+            if not errs:
+                first_valid = subschema
+                break
+            all_errors.extend(errs)
+        else:
+            yield ValidationError(
+                "%r is not valid under any of the given schemas" % (instance,),
+                context=all_errors,
+            )
+
+        more_valid = [s for i, s in subschemas if validator.is_valid(instance, s)]
+        if more_valid:
+            more_valid.append(first_valid)
+            reprs = ", ".join(repr(schema) for schema in more_valid)
+            yield ValidationError(
+                "%r is valid under each of %s" % (instance, reprs)
+            )
+
     return validators.extend(
-        validator_class, {"properties": set_defaults},
+        validator_class, {
+            "properties": set_defaults,
+            "oneOf": oneOf_discriminator
+        },
     )
 
 DefaultDraft4Validator = extend_with_default(Draft4Validator)

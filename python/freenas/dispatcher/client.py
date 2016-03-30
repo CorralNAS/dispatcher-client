@@ -80,6 +80,18 @@ def debug_log(message, *args):
         _debug_log_file.flush()
 
 
+class FileDescriptor(object):
+    def __init__(self, fd=None, close=True):
+        self.fd = fd
+        self.close = True
+
+    def __str__(self):
+        return "<FileDescriptor fd={0}>".format(self.fd)
+
+    def __repr__(self):
+        return str(self)
+
+
 class Client(object):
     class StreamingResultIterator(object):
         def __init__(self, queue):
@@ -99,7 +111,7 @@ class Client(object):
         def __init__(self, id, method, args=None):
             self.id = id
             self.method = method
-            self.args = args
+            self.args = list(args) if args is not None else None
             self.result = None
             self.error = None
             self.completed = Event()
@@ -142,12 +154,13 @@ class Client(object):
         self.event_thread = None
 
     def __pack(self, namespace, name, args, id=None):
+        fds = list(self.__collect_fds(args))
         return dumps({
             'namespace': namespace,
             'name': name,
             'args': args,
             'id': str(id if id is not None else uuid.uuid4())
-        })
+        }), fds
 
     def __call_timeout(self, call):
         pass
@@ -165,7 +178,7 @@ class Client(object):
             pending_call.queue = Queue()
             pending_call.result = self.StreamingResultIterator(pending_call.queue)
 
-        self.__send(self.__pack(
+        self.__send(*self.__pack(
             'rpc',
             call_type,
             payload,
@@ -173,7 +186,7 @@ class Client(object):
         ))
 
     def __send_event(self, name, params):
-        self.__send(self.__pack(
+        self.__send(*self.__pack(
             'events',
             'event',
             {'name': name, 'args': params}
@@ -181,7 +194,7 @@ class Client(object):
 
     def __send_event_burst(self):
         with self.event_emission_lock:
-            self.__send(self.__pack(
+            self.__send(*self.__pack(
                 'events',
                 'event_burst',
                 {'events': list([{'name': t[0], 'args': t[1]} for t in self.pending_events])},
@@ -198,16 +211,19 @@ class Client(object):
         if extra is not None:
             payload.update(extra)
 
-        self.__send(self.__pack('rpc', 'error', id=id, args=payload))
+        self.__send(*self.__pack('rpc', 'error', id=id, args=payload))
 
     def __send_response(self, id, resp):
-        self.__send(self.__pack('rpc', 'response', id=id, args=resp))
+        self.__send(*self.__pack('rpc', 'response', id=id, args=resp))
 
-    def __send(self, data):
-        debug_log('<- {0}', data)
-        self.transport.send(data)
+    def __send(self, data, fds=None):
+        if not fds:
+            fds = []
 
-    def recv(self, message):
+        debug_log('<- {0} [{1}', data, fds)
+        self.transport.send(data, fds)
+
+    def recv(self, message, fds):
         if isinstance(message, bytes):
             message = message.decode('utf-8')
         debug_log('-> {0}', message)
@@ -218,18 +234,16 @@ class Client(object):
                 self.error_callback(ClientError.INVALID_JSON_RESPONSE, err)
             return
 
-        self.decode(msg)
+        self.decode(msg, fds)
 
     def __process_event(self, name, args):
-        self.event_distribution_lock.acquire()
-        if name in self.event_handlers:
-            for h in self.event_handlers[name]:
-                h(args)
+        with self.event_distribution_lock:
+            if name in self.event_handlers:
+                for h in self.event_handlers[name]:
+                    h(args)
 
-        if self.event_callback:
-            self.event_callback(name, args)
-
-        self.event_distribution_lock.release()
+            if self.event_callback:
+                self.event_callback(name, args)
 
     def __event_emitter(self):
         while True:
@@ -239,6 +253,44 @@ class Client(object):
                 time.sleep(0.1)
                 with self.event_emission_lock:
                     self.__send_event_burst()
+
+    def __collect_fds(self, obj, start=0):
+        idx = start
+
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                if isinstance(v, FileDescriptor):
+                    obj[k] = {'$fd': idx}
+                    idx += 1
+                    yield v
+                else:
+                    for x in self.__collect_fds(v, idx):
+                        yield x
+
+        if isinstance(obj, (list, tuple)):
+            for i, o in enumerate(obj):
+                if isinstance(o, FileDescriptor):
+                    obj[i] = {'$fd': idx}
+                    idx += 1
+                    yield o
+                else:
+                    for x in self.__collect_fds(o, idx):
+                        yield x
+
+    def __replace_fds(self, obj, fds):
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                if isinstance(v, dict) and len(v) == 1 and '$fd' in v:
+                    obj[k] = FileDescriptor(fds[v['$fd']]) if v['$fd'] < len(fds) else None
+                else:
+                    self.__replace_fds(v, fds)
+
+        if isinstance(obj, list):
+            for i, o in enumerate(obj):
+                if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
+                    obj[i] = FileDescriptor(fds[o['$fd']]) if o['$fd'] < len(fds) else None
+                else:
+                    self.__replace_fds(o, fds)
 
     def wait_forever(self):
         if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
@@ -270,7 +322,9 @@ class Client(object):
             call.completed.set()
             del self.pending_calls[key]
 
-    def decode(self, msg):
+    def decode(self, msg, fds):
+        self.__replace_fds(msg, fds)
+
         if 'namespace' not in msg:
             self.error_callback(ClientError.INVALID_JSON_RESPONSE)
             return
@@ -403,10 +457,15 @@ class Client(object):
             self.event_thread = spawn_thread(target=self.__event_emitter, args=())
             self.event_thread.start()
 
-    def login_user(self, username, password, timeout=None):
+    def login_user(self, username, password, timeout=None, check_password=False, resource=None):
         call = self.PendingCall(uuid.uuid4(), 'auth')
         self.pending_calls[str(call.id)] = call
-        self.__call(call, call_type='auth', custom_payload={'username': username, 'password': password})
+        self.__call(call, call_type='auth', custom_payload={
+            'username': username,
+            'password': password,
+            'check_password': check_password,
+            'resource': resource
+        })
         self.wait_for_call(call, timeout)
         if call.error:
             raise rpc.RpcException(obj=call.error)
@@ -434,6 +493,7 @@ class Client(object):
 
     def disconnect(self):
         debug_log('Closing connection, local address {0}', self.transport.address)
+        self.drop_pending_calls()
         self.transport.close()
 
     def enable_server(self):
@@ -449,10 +509,10 @@ class Client(object):
         self.error_callback = callback
 
     def subscribe_events(self, *masks):
-        self.__send(self.__pack('events', 'subscribe', masks))
+        self.__send(*self.__pack('events', 'subscribe', masks))
 
     def unsubscribe_events(self, *masks):
-        self.__send(self.__pack('events', 'unsubscribe', masks))
+        self.__send(*self.__pack('events', 'unsubscribe', masks))
 
     def register_service(self, name, impl):
         if self.rpc is None:
@@ -515,13 +575,24 @@ class Client(object):
 
         return call.result
 
-    def call_task_sync(self, name, *args):
-        tid = self.call_sync('task.submit', name, args)
-        self.call_sync('task.wait', tid, timeout=3600)
+    def call_task_sync(self, name, *args, timeout=3600):
+        tid = self.call_sync('task.submit', name, list(args))
+        self.call_sync('task.wait', tid, timeout=timeout)
         return self.call_sync('task.status', tid)
 
+    def call_task_async(self, name, *args, timeout=3600, callback=None):
+        def wait_on_complete(self, tid, timeout, callback):
+            self.call_sync('task.wait', tid, timeout=timeout)
+            if callback:
+                callback(self.call_sync('task.status', tid))
+
+        tid = self.call_sync('task.submit', name, list(args))
+        _t = spawn_thread(target=wait_on_complete, args=(self, tid, timeout, callback), daemon=True)
+        _t.start()
+        return tid
+
     def submit_task(self, name, *args):
-        return self.call_sync('task.submit', name, args)
+        return self.call_sync('task.submit', name, list(args))
 
     def emit_event(self, name, params):
         if not self.use_bursts:
@@ -545,38 +616,34 @@ class Client(object):
     def exec_and_wait_for_event(self, event, match_fn, fn, timeout=None):
         done = Event()
         self.subscribe_events(event)
-        self.event_distribution_lock.acquire()
+        with self.event_distribution_lock:
+            try:
+                fn()
+            except:
+                raise
 
-        try:
-            fn()
-        except:
-            self.event_distribution_lock.release()
-            raise
+            def handler(args):
+                if match_fn(args):
+                    done.set()
 
-        def handler(args):
-            if match_fn(args):
-                done.set()
+            self.register_event_handler(event, handler)
 
-        self.register_event_handler(event, handler)
-        self.event_distribution_lock.release()
         done.wait(timeout=timeout)
         self.unregister_event_handler(event, handler)
 
     def test_or_wait_for_event(self, event, match_fn, initial_condition_fn, timeout=None):
         done = Event()
         self.subscribe_events(event)
-        self.event_distribution_lock.acquire()
+        with self.event_distribution_lock:
+            if initial_condition_fn():
+                return
 
-        if initial_condition_fn():
-            self.event_distribution_lock.release()
-            return
+            def handler(args):
+                if match_fn(args):
+                    done.set()
 
-        def handler(args):
-            if match_fn(args):
-                done.set()
+            self.register_event_handler(event, handler)
 
-        self.register_event_handler(event, handler)
-        self.event_distribution_lock.release()
         done.wait(timeout=timeout)
         self.unregister_event_handler(event, handler)
 

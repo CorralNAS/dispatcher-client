@@ -25,44 +25,28 @@
  *
  */
 
-#ifndef __WS_H
-#define __WS_H
+#ifndef __UNIX_H
+#define __UNIX_H
 
 #include <stdint.h>
 #include <pthread.h>
-#include <jansson.h>
 
-#define WS_FIN              (1 << 7)
-#define WS_TEXT             (0x01)
-#define WS_BINARY           (0x02)
-#define WS_CLOSE            (0x08)
-#define WS_PING             (0x09)
-#define WS_PONG             (0x10)
-#define WS_MASK             (1 << 15)
-#define WS_PAYLOAD_LEN(x)   ((x & 0x7f) << 8)
-#define WS_PAYLOAD_GET_LEN(x) ((x >> 8) & 0x7f)
+struct unix_conn;
+typedef void (*unix_message_handler_t)(struct unix_conn *, void *, size_t, void *);
 
-struct ws_conn;
-typedef void (*ws_message_handler_t)(struct ws_conn *, void *, size_t, void *);
-
-typedef struct ws_conn
+typedef struct unix_conn
 {
-    int ws_fd;
-    char *ws_uri;
-    char *ws_host;
-    char *ws_path;
-    char *ws_port;
-    struct addrinfo *ws_addrinfo;
-    pthread_t ws_thread;
-    json_t *ws_headers;
-     ws_message_handler_t ws_message_handler;
-    void *ws_message_handler_arg;
-} ws_conn_t;
+    int unix_fd;
+    char *unix_path;
+    pthread_t unix_thread;
+    unix_message_handler_t unix_message_handler;
+    void *unix_message_handler_arg;
+} unix_conn_t;
 
-ws_conn_t *ws_connect(const char *);
-void ws_close(ws_conn_t *);
-int ws_send_msg(ws_conn_t *, void *, size_t, uint8_t);
-int ws_recv_msg(ws_conn_t *, void **, size_t *, uint8_t *);
-int ws_get_fd(ws_conn_t *);
+unix_conn_t *unix_connect(const char *);
+void unix_close(unix_conn_t *);
+int unix_send_msg(unix_conn_t *, void *, size_t);
+int unix_recv_msg(unix_conn_t *, void **, size_t *);
+int unix_get_fd(unix_conn_t *);
 
-#endif  /* __WS_H */
+#endif  /* __UNIX_H */

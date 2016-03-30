@@ -33,7 +33,11 @@ from freenas.dispatcher.rpc import RpcException
 
 if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
     from gevent.queue import Queue
+    from gevent.event import Event
+    from gevent import sleep
 else:
+    from threading import Event
+    from time import sleep
     try:
         from queue import Queue
     except ImportError:
@@ -62,6 +66,7 @@ class EntitySubscriber(object):
         self.on_delete = None
         self.on_error = None
         self.remote = False
+        self.ready = Event()
         self.listeners = {}
 
     def __on_changed(self, args, event=True):
@@ -126,9 +131,13 @@ class EntitySubscriber(object):
         return len(self.items)
 
     def start(self):
+        def callback(result):
+            self.__add(result, False)
+            self.ready.set()
+
         self.client.call_async(
             '{0}.query'.format(self.name),
-            lambda x: self.__add(x, False), [],
+            callback, [],
             {'limit': self.items.maxsize},
             streaming=True
         )
@@ -146,9 +155,16 @@ class EntitySubscriber(object):
 
     def query(self, *filter, **params):
         if self.remote:
-            return self.client.call_sync('{0}.query'.format(self.name), filter, params)
+            return wrap(self.client.call_sync('{0}.query'.format(self.name), filter, params))
 
         return wrap(list(self.items.values())).query(*filter, **params)
+
+    def get(self, id, timeout=None):
+        val = self.items.get(id)
+        if val is not None or timeout is None:
+            return val
+        sleep(timeout)
+        return self.items.get(id)
 
     def viewport(self, *filter, **params):
         return wrap(list(self.items.values())).query(*filter, **params)
@@ -174,3 +190,6 @@ class EntitySubscriber(object):
             except GeneratorExit:
                 self.listeners[id].remove(q)
                 raise StopIteration
+
+    def wait_ready(self, timeout=None):
+        self.ready.wait(timeout)

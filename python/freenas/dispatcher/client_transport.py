@@ -26,17 +26,22 @@
 #####################################################################
 
 from __future__ import print_function
+import array
 import os
 import errno
 import paramiko
 import socket
 import time
+import logging
+from freenas.utils import xrecvmsg, xsendmsg
 from freenas.utils.spawn_thread import ClientType, spawn_thread
 from abc import ABCMeta, abstractmethod
 from six import with_metaclass
 import struct
 
 
+MAXFDS = 128
+CMSGCRED_SIZE = struct.calcsize('iiiih16i')
 _debug_log_file = None
 
 
@@ -66,14 +71,8 @@ def debug_log(message, *args):
         _debug_log_file.flush()
 
 
-def _patched_exec_command(self,
-                          command,
-                          bufsize=-1,
-                          timeout=None,
-                          get_pty=False,
-                          stdin_binary=True,
-                          stdout_binary=False,
-                          stderr_binary=False):
+def _patched_exec_command(self, command, bufsize=-1, timeout=None, get_pty=False, stdin_binary=True,
+                          stdout_binary=False, stderr_binary=False):
 
     chan = self._transport.open_session()
     if get_pty:
@@ -112,7 +111,7 @@ class ClientTransportBase(with_metaclass(ABCMeta, object)):
         return
 
     @abstractmethod
-    def send(self, message):
+    def send(self, message, fds):
         return
 
     @abstractmethod
@@ -139,7 +138,7 @@ class ClientTransportWS(ClientTransportBase):
                 self.parent.parent.error_callback(ClientError.CONNECTION_CLOSED)
 
         def received_message(self, message):
-            self.parent.parent.recv(message.data)
+            self.parent.parent.recv(message.data, None)
 
     def __init__(self):
         self.parent = None
@@ -197,7 +196,7 @@ class ClientTransportWS(ClientTransportBase):
     def address(self):
         return self.ws.local_address
 
-    def send(self, message):
+    def send(self, message, fds):
         try:
             self.ws.send(message)
         except OSError as err:
@@ -238,7 +237,6 @@ class ClientTransportSSH(ClientTransportBase):
         self.stdout = None
         self.stderr = None
         self.host_key_file = None
-        self.host_key = None
         self.look_for_keys = True
 
     def connect(self, url, parent, **kwargs):
@@ -287,32 +285,21 @@ class ClientTransportSSH(ClientTransportBase):
         if not self.pkey and not self.password and not self.key_filename:
             raise ValueError('No password, key_filename nor pkey for authentication declared.')
 
-        self.host_key = kwargs.get('host_key', None)
         self.host_key_file = kwargs.get('host_key_file', None)
-        if self.host_key and self.host_key_file:
-            raise ValueError('Both host_key and host_key_file parameters cannot be specified simultaneously.')
 
         debug_log('Trying to connect to {0}', self.hostname)
 
         try:
             self.ssh = paramiko.SSHClient()
+            logging.getLogger("paramiko").setLevel(logging.WARNING)
             if self.host_key_file:
+                self.look_for_keys = False
                 try:
                     self.ssh.load_host_keys(self.host_key_file)
-                    self.look_for_keys = False
                 except IOError:
                     debug_log('Cannot read host key file: {0}. SSH transport is closing.', self.host_key_file)
                     self.close()
                     raise
-            elif self.host_key:
-                key_hostname, key_type, key = self.host_key.split(' ')
-                if not key_hostname:
-                    raise ValueError('Hostname field of host key is not specified.')
-                if not key:
-                    raise ValueError('Key field of host key is not specified.')
-                if key_type is not "ssh-rsa" or key_type is not "ssh-dss":
-                    raise ValueError('Key_type field of host key must be either ssh-rsa or ssh-dss.')
-                self.ssh._host_keys.add(key_hostname, key_type, key)
             else:
                 self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -354,7 +341,7 @@ class ClientTransportSSH(ClientTransportBase):
         recv_t = spawn_thread(target=self.recv, daemon=True)
         recv_t.start()
 
-    def send(self, message):
+    def send(self, message, fds):
         if self.terminated is False:
             header = struct.pack('II', 0xdeadbeef, len(message))
             message = header + message.encode('utf-8')
@@ -382,7 +369,7 @@ class ClientTransportSSH(ClientTransportBase):
                 self.closed()
             else:
                 debug_log("Received data: {0}", message)
-                self.parent.recv(message)
+                self.parent.recv(message, None)
 
     def closed(self):
         debug_log("Transport connection has been closed abnormally.")
@@ -416,6 +403,7 @@ class ClientTransportSock(ClientTransportBase):
         self.terminated = False
         self.fd = None
         self.close_lock = RLock()
+        self.wlock = RLock()
 
     def connect(self, url, parent, **kwargs):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -452,41 +440,68 @@ class ClientTransportSock(ClientTransportBase):
     def address(self):
         return self.path
 
-    def send(self, message):
+    def send(self, message, fds):
         if self.terminated is False:
-            header = struct.pack('II', 0xdeadbeef, len(message))
-            message = header + message.encode('utf-8')
-            sent = self.fd.write(message)
-            self.fd.flush()
-            if sent == 0:
-                self.closed()
+            try:
+                header = struct.pack('II', 0xdeadbeef, len(message))
+                message = message.encode('utf-8')
+
+                with self.wlock:
+                    xsendmsg(self.sock, header)
+                    xsendmsg(self.sock, message, [
+                        (socket.SOL_SOCKET, socket.SCM_CREDS, bytearray(CMSGCRED_SIZE)),
+                        (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds]))
+                    ])
+
+                    for i in fds:
+                        if i.close:
+                            os.close(i.fd)
+
+                    self.fd.flush()
+            except (OSError, ValueError):
+                self.sock.shutdown(socket.SHUT_RDWR)
             else:
                 debug_log("Sent data: {0}", message)
 
     def recv(self):
         while self.terminated is False:
-            header = self.fd.read(8)
-            if header == b'' or len(header) != 8:
-                self.closed()
+            try:
+                fds = array.array('i')
+                header, _ = xrecvmsg(self.sock, 8)
+                if header == b'' or len(header) != 8:
+                    break
+
+                magic, length = struct.unpack('II', header)
+                if magic != 0xdeadbeef:
+                    debug_log('Message with wrong magic dropped (magic {0:x})'.format(magic))
+                    continue
+
+                message, ancdata, = xrecvmsg(self.sock, length, socket.CMSG_LEN(MAXFDS * fds.itemsize))
+                if message == b'' or len(message) != length:
+                    break
+                else:
+                    debug_log("Received data: {0}", message)
+                    for cmsg_level, cmsg_type, cmsg_data in ancdata:
+                        if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS:
+                            fds.fromstring(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
+
+                    self.parent.recv(message, fds)
+            except OSError:
                 break
 
-            magic, length = struct.unpack('II', header)
-            if magic != 0xdeadbeef:
-                debug_log('Message with wrong magic dropped')
-                continue
+        try:
+            self.sock.close()
+            self.fd.close()
+        except OSError:
+            pass
 
-            message = self.fd.read(length)
-            if message == b'' or len(message) != length:
-                self.closed()
-            else:
-                debug_log("Received data: {0}", message)
-                self.parent.recv(message)
+        if self.terminated is False:
+            self.closed()
 
     def close(self):
-        debug_log("Connect failed.")
+        debug_log("Disconnected.")
         self.terminated = True
-        self.sock.close()
-        self.fd.close()
+        self.sock.shutdown(socket.SHUT_RDWR)
 
     def closed(self):
         with self.close_lock:
@@ -494,8 +509,6 @@ class ClientTransportSock(ClientTransportBase):
                 debug_log("Transport socket connection terminated abnormally.")
                 self.terminated = True
                 self.parent.drop_pending_calls()
-                self.sock.close()
-                self.fd.close()
                 if self.parent.error_callback is not None:
                     from freenas.dispatcher.client import ClientError
                     self.parent.error_callback(ClientError.CONNECTION_CLOSED)

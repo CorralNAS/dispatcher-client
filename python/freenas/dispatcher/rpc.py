@@ -33,6 +33,7 @@ import sys
 import traceback
 import hashlib
 import json
+import itertools
 from freenas.dispatcher import validator
 from freenas.utils import iter_chunked
 from jsonschema import RefResolver
@@ -102,11 +103,14 @@ class RpcContext(object):
             raise RpcException(
                 errno.EINVAL, "One or more passed arguments failed schema verification", extra=errors)
 
-    def dispatch_call(self, method, args, sender=None, streaming=True):
+    def dispatch_call(self, method, args, sender=None, streaming=True, validation=True):
         service, sep, name = method.rpartition(".")
 
         if args is None:
             args = {}
+
+        if not self.streaming_enabled:
+            streaming = False
 
         if not service:
             raise RpcException(errno.EINVAL, "Invalid function path")
@@ -124,7 +128,7 @@ class RpcContext(object):
                 if not self.user.has_role(i):
                     raise RpcException(errno.EACCES, 'Insufficent privileges')
 
-        if hasattr(func, 'params_schema'):
+        if hasattr(func, 'params_schema') and validation:
             self.validate_call(args, func.params_schema)
 
         if hasattr(func, 'pass_sender'):
@@ -139,11 +143,30 @@ class RpcContext(object):
             elif type(args) is list:
                 result = func(*args)
 
-            if hasattr(func, 'generator') and func.generator:
-                if self.streaming_enabled and streaming:
-                    result = RpcStreamingResponse(iter_chunked(result, self.streaming_burst))
+            import logging
+
+            if hasattr(result, '__next__'):
+                #
+                # Peek first item out of the iterator to check whether if raises
+                # StopIteration with a value. If it does, it means that RPC method
+                # returned a value (by "return x") instead of yielding a value.
+                # Return normal (non-streaming) response in that case.
+                # Otherwise, reconstruct original iterator using itertools.chain().
+                #
+                try:
+                    first = next(result)
+                except StopIteration as stp:
+                    if stp.value is not None:
+                        result = stp.value
+                    else:
+                        result = iter(())
                 else:
-                    result = list(result)
+                    result = itertools.chain([first], result)
+                    if hasattr(func, 'generator') and func.generator:
+                        if streaming:
+                            result = RpcStreamingResponse(iter_chunked(result, self.streaming_burst))
+                        else:
+                            result = list(result)
 
         except RpcException:
             raise

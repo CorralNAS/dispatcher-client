@@ -102,7 +102,7 @@ class RpcContext(object):
             raise RpcException(
                 errno.EINVAL, "One or more passed arguments failed schema verification", extra=errors)
 
-    def dispatch_call(self, method, args, sender=None):
+    def dispatch_call(self, method, args, sender=None, streaming=True):
         service, sep, name = method.rpartition(".")
 
         if args is None:
@@ -140,7 +140,7 @@ class RpcContext(object):
                 result = func(*args)
 
             if hasattr(func, 'generator') and func.generator:
-                if self.streaming_enabled:
+                if self.streaming_enabled and streaming:
                     result = RpcStreamingResponse(iter_chunked(result, self.streaming_burst))
                 else:
                     result = list(result)

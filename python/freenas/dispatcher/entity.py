@@ -155,7 +155,7 @@ class EntitySubscriber(object):
 
     def query(self, *filter, **params):
         if self.remote:
-            return wrap(self.client.call_sync('{0}.query'.format(self.name), filter, params))
+            return wrap(list(self.client.call_sync('{0}.query'.format(self.name), filter, params, streaming=True)))
 
         return wrap(list(self.items.values())).query(*filter, **params)
 

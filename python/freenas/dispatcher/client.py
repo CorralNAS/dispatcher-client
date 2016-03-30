@@ -220,7 +220,7 @@ class Client(object):
         if not fds:
             fds = []
 
-        debug_log('<- {0} [{1}', data, fds)
+        debug_log('<- {0} [{1}]', data, fds)
         self.transport.send(data, fds)
 
     def recv(self, message, fds):

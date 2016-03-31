@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <errno.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/event.h>
@@ -316,6 +317,11 @@ dispatcher_pack_msg(const char *ns, const char *name, json_t *id, json_t *args)
     json_t *obj;
 
     obj = json_object();
+    if (obj == NULL) {
+        errno = ENOMEM;
+        return (NULL);
+    }
+
     json_object_set(obj, "namespace", json_string(ns));
     json_object_set(obj, "name", json_string(name));
     json_object_set(obj, "id", id);
@@ -335,6 +341,7 @@ dispatcher_send_msg(connection_t *conn, json_t *msg)
     if (conn->conn_unix != NULL)
         return (unix_send_msg(conn->conn_unix, str, strlen(str)));
 
+    errno = ENXIO;
     return (-1);
 }
 

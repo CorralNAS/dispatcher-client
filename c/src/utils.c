@@ -25,6 +25,7 @@
  *
  */
 
+#define _WITH_GETLINE
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>

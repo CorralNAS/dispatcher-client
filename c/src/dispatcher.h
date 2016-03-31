@@ -64,6 +64,7 @@ int dispatcher_subscribe_event(connection_t *, const char *);
 int dispatcher_unsubscribe_event(connection_t *, const char *);
 int dispatcher_call_sync(connection_t *, const char *, json_t *, json_t **);
 rpc_call_t *dispatcher_call_async(connection_t *, const char *, json_t *, rpc_callback_t *, void *);
+int dispatcher_emit_event(connection_t *, const char *, json_t *);
 void dispatcher_on_error(connection_t *, error_callback_t *, void *);
 void dispatcher_on_event(connection_t *, event_callback_t *, void *);
 void rpc_call_wait(rpc_call_t *);

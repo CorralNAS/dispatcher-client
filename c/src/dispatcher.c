@@ -226,6 +226,27 @@ dispatcher_call_async(connection_t *conn, const char *name, json_t *args,
     return (call);
 }
 
+int
+dispatcher_emit_event(connection_t *conn, const char *name, json_t *args)
+{
+    json_t *msg, *payload;
+
+    payload = json_pack("{ssso}", "name", name, "args", args);
+    if (payload == NULL)
+        return (-1);
+
+    msg = dispatcher_pack_msg("events", "event", json_null(), payload);
+    if (msg == NULL)
+        return (-1);
+
+    if (dispatcher_send_msg(conn, msg) < 0) {
+        json_decref(msg);
+        return (-1);
+    }
+
+    return (0);
+}
+
 void
 dispatcher_on_error(connection_t *conn, error_callback_t *cb, void *arg)
 {

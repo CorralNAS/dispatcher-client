@@ -401,13 +401,11 @@ class ClientTransportSock(ClientTransportBase):
         self.sock = None
         self.parent = None
         self.terminated = False
-        self.fd = None
         self.close_lock = RLock()
         self.wlock = RLock()
 
     def connect(self, url, parent, **kwargs):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.fd = self.sock.makefile('rwb')
         self.parent = parent
         if not self.parent:
             raise RuntimeError('ClientTransportSock can be only created inside of a class')
@@ -442,13 +440,12 @@ class ClientTransportSock(ClientTransportBase):
 
     def send(self, message, fds):
         if self.terminated is False:
-            try:
-                header = struct.pack('II', 0xdeadbeef, len(message))
-                message = message.encode('utf-8')
+            with self.wlock:
+                try:
+                    header = struct.pack('II', 0xdeadbeef, len(message))
+                    message = message.encode('utf-8')
 
-                with self.wlock:
-                    xsendmsg(self.sock, header)
-                    xsendmsg(self.sock, message, [
+                    xsendmsg(self.sock, header + message, [
                         (socket.SOL_SOCKET, socket.SCM_CREDS, bytearray(CMSGCRED_SIZE)),
                         (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds]))
                     ])
@@ -457,17 +454,17 @@ class ClientTransportSock(ClientTransportBase):
                         if i.close:
                             os.close(i.fd)
 
-                    self.fd.flush()
-            except (OSError, ValueError):
-                self.sock.shutdown(socket.SHUT_RDWR)
-            else:
-                debug_log("Sent data: {0}", message)
+                except (OSError, ValueError) as err:
+                    debug_log("Send failed: {0}".format(err))
+                    self.sock.shutdown(socket.SHUT_RDWR)
+                else:
+                    debug_log("Sent data: {0}", message)
 
     def recv(self):
         while self.terminated is False:
             try:
                 fds = array.array('i')
-                header, _ = xrecvmsg(self.sock, 8)
+                header, ancdata = xrecvmsg(self.sock, 8, socket.CMSG_LEN(MAXFDS * fds.itemsize))
                 if header == b'' or len(header) != 8:
                     break
 
@@ -476,22 +473,21 @@ class ClientTransportSock(ClientTransportBase):
                     debug_log('Message with wrong magic dropped (magic {0:x})'.format(magic))
                     continue
 
-                message, ancdata, = xrecvmsg(self.sock, length, socket.CMSG_LEN(MAXFDS * fds.itemsize))
+                message, _, = xrecvmsg(self.sock, length)
                 if message == b'' or len(message) != length:
                     break
-                else:
-                    debug_log("Received data: {0}", message)
-                    for cmsg_level, cmsg_type, cmsg_data in ancdata:
-                        if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS:
-                            fds.fromstring(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
 
-                    self.parent.recv(message, fds)
+                debug_log("Received data: {0}", message)
+                for cmsg_level, cmsg_type, cmsg_data in ancdata:
+                    if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS:
+                        fds.fromstring(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
+
+                self.parent.recv(message, fds)
             except OSError:
                 break
 
         try:
             self.sock.close()
-            self.fd.close()
         except OSError:
             pass
 

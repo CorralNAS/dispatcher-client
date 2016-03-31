@@ -155,13 +155,20 @@ class RpcContext(object):
                 #
                 try:
                     first = next(result)
+                    peek = True
                 except StopIteration as stp:
                     if stp.value is not None:
                         result = stp.value
                     else:
                         result = iter(())
-                else:
-                    result = itertools.chain([first], result)
+
+                    peek = False
+
+                # Still an iterator?
+                if hasattr(result, '__next__'):
+                    if peek:
+                        result = itertools.chain([first], result)
+
                     if hasattr(func, 'generator') and func.generator:
                         if streaming:
                             result = RpcStreamingResponse(iter_chunked(result, self.streaming_burst))

@@ -26,6 +26,7 @@
 #####################################################################
 
 import errno
+from freenas.utils import include
 from jsonschema import Draft4Validator
 from jsonschema.validators import create
 from jsonschema.exceptions import ValidationError
@@ -71,7 +72,7 @@ def extend_with_default(validator_class):
             meta_schema=validator.META_SCHEMA,
             validators=all_validators,
             version=version,
-            default_types=validator.DEFAULT_TYPES.update({u"fd": FileDescriptor}),
+            default_types=include(validator.DEFAULT_TYPES, {u"fd": FileDescriptor}),
         )
 
     def set_defaults(validator, properties, instance, schema):

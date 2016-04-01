@@ -26,55 +26,13 @@
 #####################################################################
 
 import errno
-import numbers
-from jsonschema import Draft4Validator, validators, _utils, _validators
+from jsonschema import Draft4Validator
+from jsonschema.validators import create
 from jsonschema.exceptions import ValidationError
-from jsonschema.compat import str_types, int_types
-from freenas.utils import first_or_default, exclude
+from freenas.utils import first_or_default
 from freenas.dispatcher.fd import FileDescriptor
 
 import six
-
-default_types = {
-    u"array": list, u"boolean": bool, u"integer": int_types,
-    u"null": type(None), u"number": numbers.Number, u"object": dict,
-    u"string": str_types, u"fd": FileDescriptor
-}
-
-
-Draft4ValidatorWithFds = validators.create(
-    meta_schema=_utils.load_schema("draft4"),
-    validators={
-        u"$ref": _validators.ref,
-        u"additionalItems": _validators.additionalItems,
-        u"additionalProperties": _validators.additionalProperties,
-        u"allOf": _validators.allOf_draft4,
-        u"anyOf": _validators.anyOf_draft4,
-        u"dependencies": _validators.dependencies,
-        u"enum": _validators.enum,
-        u"format": _validators.format,
-        u"items": _validators.items,
-        u"maxItems": _validators.maxItems,
-        u"maxLength": _validators.maxLength,
-        u"maxProperties": _validators.maxProperties_draft4,
-        u"maximum": _validators.maximum,
-        u"minItems": _validators.minItems,
-        u"minLength": _validators.minLength,
-        u"minProperties": _validators.minProperties_draft4,
-        u"minimum": _validators.minimum,
-        u"multipleOf": _validators.multipleOf,
-        u"not": _validators.not_draft4,
-        u"oneOf": _validators.oneOf_draft4,
-        u"pattern": _validators.pattern,
-        u"patternProperties": _validators.patternProperties,
-        u"properties": _validators.properties_draft4,
-        u"required": _validators.required_draft4,
-        u"type": _validators.type_draft4,
-        u"uniqueItems": _validators.uniqueItems,
-    },
-    version="draft4",
-    default_types=default_types
-)
 
 
 def serialize_errors(errors):
@@ -105,6 +63,16 @@ def schema_to_dict(schema):
 
 def extend_with_default(validator_class):
     validate_properties = validator_class.VALIDATORS["properties"]
+
+    def extend(validator, validators, version=None):
+        all_validators = dict(validator.VALIDATORS)
+        all_validators.update(validators)
+        return create(
+            meta_schema=validator.META_SCHEMA,
+            validators=all_validators,
+            version=version,
+            default_types=validator.DEFAULT_TYPES.update({u"fd": FileDescriptor}),
+        )
 
     def set_defaults(validator, properties, instance, schema):
         for error in validate_properties(
@@ -150,11 +118,11 @@ def extend_with_default(validator_class):
                 "%r is valid under each of %s" % (instance, reprs)
             )
 
-    return validators.extend(
+    return extend(
         validator_class, {
             "properties": set_defaults,
             "oneOf": oneOf_discriminator
         },
     )
 
-DefaultDraft4Validator = extend_with_default(Draft4ValidatorWithFds)
+DefaultDraft4Validator = extend_with_default(Draft4Validator)

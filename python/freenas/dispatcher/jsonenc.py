@@ -53,6 +53,10 @@ def decode_hook(obj):
     return obj
 
 
+def load(fp):
+    return json.load(fp, object_hook=decode_hook)
+
+
 def loads(s):
     return json.loads(s, object_hook=decode_hook)
 

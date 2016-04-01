@@ -35,6 +35,7 @@ from .jsonenc import dumps, loads
 from freenas.dispatcher import rpc
 from freenas.utils.spawn_thread import ClientType, spawn_thread
 from freenas.dispatcher.client_transport import ClientTransportBuilder
+from freenas.dispatcher.fd import FileDescriptor
 from freenas.utils.query import matches
 from ws4py.compat import urlsplit
 
@@ -78,18 +79,6 @@ def debug_log(message, *args):
 
         print(message.format(*args), file=_debug_log_file)
         _debug_log_file.flush()
-
-
-class FileDescriptor(object):
-    def __init__(self, fd=None, close=True):
-        self.fd = fd
-        self.close = True
-
-    def __str__(self):
-        return "<FileDescriptor fd={0}>".format(self.fd)
-
-    def __repr__(self):
-        return str(self)
 
 
 class Client(object):

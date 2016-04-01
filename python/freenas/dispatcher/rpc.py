@@ -35,6 +35,7 @@ import hashlib
 import json
 import itertools
 from freenas.dispatcher import validator
+from freenas.dispatcher.fd import FileDescriptor
 from freenas.utils import iter_chunked
 from jsonschema import RefResolver
 
@@ -427,6 +428,7 @@ class SchemaHelper(object):
 
 def convert_schema(sch):
     type_mapping = {
+        FileDescriptor: 'fd',
         str: 'string',
         float: 'number',
         bool: 'boolean',

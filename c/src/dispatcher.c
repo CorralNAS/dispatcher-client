@@ -230,22 +230,28 @@ dispatcher_call_async(connection_t *conn, const char *name, json_t *args,
 int
 dispatcher_emit_event(connection_t *conn, const char *name, json_t *args)
 {
-    json_t *msg, *payload;
+    json_t *msg, *payload, *id;
+    int err;
 
+    id = json_null();
     payload = json_pack("{ssso}", "name", name, "args", args);
-    if (payload == NULL)
-        return (-1);
-
-    msg = dispatcher_pack_msg("events", "event", json_null(), payload);
-    if (msg == NULL)
-        return (-1);
-
-    if (dispatcher_send_msg(conn, msg) < 0) {
-        json_decref(msg);
+    if (payload == NULL) {
+        json_decref(id);
         return (-1);
     }
 
-    return (0);
+    msg = dispatcher_pack_msg("events", "event", id, payload);
+    if (msg == NULL) {
+        json_decref(id);
+        json_decref(payload);
+        return (-1);
+    }
+
+    err = dispatcher_send_msg(conn, msg);
+    json_decref(id);
+    json_decref(payload);
+    json_decref(msg);
+    return (err);
 }
 
 void

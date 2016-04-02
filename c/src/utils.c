@@ -38,55 +38,55 @@
 void *
 xmalloc(size_t nbytes)
 {
-    void *ptr = malloc(nbytes);
-    memset(ptr, 0, nbytes);
-    return ptr;
+	void *ptr = malloc(nbytes);
+	memset(ptr, 0, nbytes);
+	return ptr;
 }
 
 ssize_t
 xread(int fd, void *buf, size_t nbytes)
 {
-    ssize_t ret, done = 0;
+	ssize_t ret, done = 0;
 
-    while (done < nbytes) {
-        ret = read(fd, (void *)(buf + done), nbytes - done);
-        if (ret < 0) {
-            if (errno == EINTR || errno == EAGAIN)
-                continue;
+	while (done < nbytes) {
+		ret = read(fd, (void *)(buf + done), nbytes - done);
+		if (ret < 0) {
+			if (errno == EINTR || errno == EAGAIN)
+				continue;
 
-            return (-1);
-        }
+			return (-1);
+		}
 
-        done += ret;
-    }
+		done += ret;
+	}
 
-    return (done);
+	return (done);
 }
 
 ssize_t
 xwrite(int fd, void *buf, size_t nbytes)
 {
-    ssize_t ret, done = 0;
+	ssize_t ret, done = 0;
 
-    while (done < nbytes) {
-        ret = write(fd, (void *)(buf + done), nbytes - done);
-        if (ret < 0) {
-            if (errno == EINTR || errno == EAGAIN)
-                continue;
+	while (done < nbytes) {
+		ret = write(fd, (void *)(buf + done), nbytes - done);
+		if (ret < 0) {
+			if (errno == EINTR || errno == EAGAIN)
+				continue;
 
-            return (-1);
-        }
+			return (-1);
+		}
 
-        done += ret;
-    }
+		done += ret;
+	}
 
-    return (done);
+	return (done);
 }
 
 char *xfgetln(FILE *f)
 {
-    size_t nbytes = LINEMAX;
-    char *buf = xmalloc(nbytes + 1);
-    getline(&buf, &nbytes, f);
-    return buf;
+	size_t nbytes = LINEMAX;
+	char *buf = xmalloc(nbytes + 1);
+	getline(&buf, &nbytes, f);
+	return buf;
 }

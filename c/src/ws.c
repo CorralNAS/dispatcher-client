@@ -59,289 +59,292 @@ static void *ws_event_loop(void *arg);
 static char *
 xsubstrdup(char *str, int start, int end)
 {
-    char *ret = xmalloc(sizeof(char) * (end - start + 1));
-    strncpy(ret, (char *)(str + start), end - start);
-    return ret;
+	char *ret = xmalloc(sizeof(char) * (end - start + 1));
+	strncpy(ret, (char *)(str + start), end - start);
+	return ret;
 }
 
 static int
 http_parse_uri(ws_conn_t *conn, char *uri)
 {
-    int status;
-    regex_t re;
-    regmatch_t match[4];
+	int status;
+	regex_t re;
+	regmatch_t match[4];
 
-    if (regcomp(&re, "http://([^/:]+):([0-9]+)/(.*)", REG_EXTENDED|REG_ICASE) < 0) {
-        errno = EINVAL;
-        return -1;
-    }
+	if (regcomp(&re, "http://([^/:]+):([0-9]+)/(.*)",
+	    REG_EXTENDED|REG_ICASE) < 0) {
+		errno = EINVAL;
+		return -1;
+	}
 
-    if (regexec(&re, uri, re.re_nsub + 1, match, 0) != 0) {
-        errno = EINVAL;
-        return -1;
-    }
+	if (regexec(&re, uri, re.re_nsub + 1, match, 0) != 0) {
+		errno = EINVAL;
+		return -1;
+	}
 
-    struct addrinfo hints = {
-            .ai_family = AF_INET,
-            .ai_socktype = SOCK_STREAM
-    };
+	struct addrinfo hints = {
+			.ai_family = AF_INET,
+			.ai_socktype = SOCK_STREAM
+	};
 
-    conn->ws_host = xsubstrdup(uri, match[1].rm_so, match[1].rm_eo);
-    conn->ws_port = xsubstrdup(uri, match[2].rm_so, match[2].rm_eo);
-    conn->ws_path = xsubstrdup(uri, match[3].rm_so, match[3].rm_eo);
+	conn->ws_host = xsubstrdup(uri, match[1].rm_so, match[1].rm_eo);
+	conn->ws_port = xsubstrdup(uri, match[2].rm_so, match[2].rm_eo);
+	conn->ws_path = xsubstrdup(uri, match[3].rm_so, match[3].rm_eo);
 
-    if (getaddrinfo(conn->ws_host, conn->ws_port, &hints, &conn->ws_addrinfo) != 0) {
-        errno = EHOSTUNREACH;
-        return -1;
-    }
+	if (getaddrinfo(conn->ws_host, conn->ws_port, &hints,
+	    &conn->ws_addrinfo) != 0) {
+		errno = EHOSTUNREACH;
+		return -1;
+	}
 
-    return 0;
+	return 0;
 }
 
 ws_conn_t *
 ws_connect(const char *uri)
 {
-    ws_conn_t *conn;
-    char *hostname;
-    struct addrinfo *ptr;
+	ws_conn_t *conn;
+	char *hostname;
+	struct addrinfo *ptr;
 
-    conn = xmalloc(sizeof(ws_conn_t));
-    conn->ws_uri = strdup(uri);
-    conn->ws_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	conn = xmalloc(sizeof(ws_conn_t));
+	conn->ws_uri = strdup(uri);
+	conn->ws_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-    if (conn->ws_fd < 0)
-        goto fail;
+	if (conn->ws_fd < 0)
+		goto fail;
 
-    if (http_parse_uri(conn, conn->ws_uri) < 0)
-        goto fail;
+	if (http_parse_uri(conn, conn->ws_uri) < 0)
+		goto fail;
 
-    for (ptr = conn->ws_addrinfo; ptr; ptr = ptr->ai_next) {
-        if (connect(conn->ws_fd, ptr->ai_addr, ptr->ai_addrlen) < 0)
-            continue;
+	for (ptr = conn->ws_addrinfo; ptr; ptr = ptr->ai_next) {
+		if (connect(conn->ws_fd, ptr->ai_addr, ptr->ai_addrlen) < 0)
+			continue;
 
-        if (ws_handshake(conn) < 0) {
-            shutdown(conn->ws_fd, SHUT_RDWR);
-            goto fail;
-        }
+		if (ws_handshake(conn) < 0) {
+			shutdown(conn->ws_fd, SHUT_RDWR);
+			goto fail;
+		}
 
-        break;
-    }
+		break;
+	}
 
-    if (pthread_create(&conn->ws_thread, NULL, ws_event_loop, conn)) {
-        shutdown(conn->ws_fd, SHUT_RDWR);
-        goto fail;
-    }
+	if (pthread_create(&conn->ws_thread, NULL, ws_event_loop, conn)) {
+		shutdown(conn->ws_fd, SHUT_RDWR);
+		goto fail;
+	}
 
-    return (conn);
+	return (conn);
 
 fail:
-    free(conn);
-    return (NULL);
+	free(conn);
+	return (NULL);
 }
 
 static int
 ws_handshake(ws_conn_t *conn)
 {
-    int status;
-    json_t *hdr;
-    FILE *f = fdopen(conn->ws_fd, "a+");
+	int status;
+	json_t *hdr;
+	FILE *f = fdopen(conn->ws_fd, "a+");
 
-    fprintf(f, "GET /%s HTTP/1.1\r\n", conn->ws_path);
-    fprintf(f, "Host: %s:%s\r\n", conn->ws_host, conn->ws_port);
-    fprintf(f, "Upgrade: websocket\r\n");
-    fprintf(f, "Connection: Upgrade\r\n");
-    fprintf(f, "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n");
-    fprintf(f, "Sec-WebSocket-Version: 13\r\n");
-    fprintf(f, "\r\n");
+	fprintf(f, "GET /%s HTTP/1.1\r\n", conn->ws_path);
+	fprintf(f, "Host: %s:%s\r\n", conn->ws_host, conn->ws_port);
+	fprintf(f, "Upgrade: websocket\r\n");
+	fprintf(f, "Connection: Upgrade\r\n");
+	fprintf(f, "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n");
+	fprintf(f, "Sec-WebSocket-Version: 13\r\n");
+	fprintf(f, "\r\n");
 
-    if (fscanf(f, "HTTP/1.%*1d %3d %*[^\r\n]\r\n", &status) < 1) {
-        errno = EINVAL;
-        return (-1);
-    }
+	if (fscanf(f, "HTTP/1.%*1d %3d %*[^\r\n]\r\n", &status) < 1) {
+		errno = EINVAL;
+		return (-1);
+	}
 
-    conn->ws_headers = json_object();
+	conn->ws_headers = json_object();
 
-    for (;;) {
-        char *line = xfgetln(f);
-        char name[LINEMAX], value[LINEMAX];
+	for (;;) {
+		char *line = xfgetln(f);
+		char name[LINEMAX], value[LINEMAX];
 
-        if (line[0] == '\n') {
-            free(line);
-            break;
-        }
+		if (line[0] == '\n') {
+			free(line);
+			break;
+		}
 
-        if (sscanf(line, "%[^:\n]: %[^\r\n]\r\n", name, value) < 2) {
-            free(line);
-            break;
-        }
+		if (sscanf(line, "%[^:\n]: %[^\r\n]\r\n", name, value) < 2) {
+			free(line);
+			break;
+		}
 
-        json_object_set(conn->ws_headers, name, json_string(value));
-        free(line);
-    }
+		json_object_set(conn->ws_headers, name, json_string(value));
+		free(line);
+	}
 
-    if (status == 301 || status == 302) {
-        fclose(f);
-        shutdown(conn->ws_fd, SHUT_RDWR);
-    }
+	if (status == 301 || status == 302) {
+		fclose(f);
+		shutdown(conn->ws_fd, SHUT_RDWR);
+	}
 
-    hdr = json_object_get(conn->ws_headers, "Upgrade");
-    if (hdr == NULL)
-        goto fail;
+	hdr = json_object_get(conn->ws_headers, "Upgrade");
+	if (hdr == NULL)
+		goto fail;
 
-    if (strcmp(json_string_value(hdr), "websocket"))
-        goto fail;
+	if (strcmp(json_string_value(hdr), "websocket"))
+		goto fail;
 
-    hdr = json_object_get(conn->ws_headers, "Connection");
-    if (hdr == NULL)
-        goto fail;
+	hdr = json_object_get(conn->ws_headers, "Connection");
+	if (hdr == NULL)
+		goto fail;
 
-    if (strcmp(json_string_value(hdr), "Upgrade"))
-        goto fail;
+	if (strcmp(json_string_value(hdr), "Upgrade"))
+		goto fail;
 
-    return (0);
+	return (0);
 
 fail:
-    json_decref(conn->ws_headers);
-    fclose(f);
-    return (-1);
+	json_decref(conn->ws_headers);
+	fclose(f);
+	return (-1);
 }
 
 void
 ws_close(ws_conn_t *conn)
 {
-    shutdown(conn->ws_fd, SHUT_RDWR);
-    close(conn->ws_fd);
+	shutdown(conn->ws_fd, SHUT_RDWR);
+	close(conn->ws_fd);
 
-    free(conn->ws_uri);
-    free(conn->ws_host);
-    free(conn->ws_port);
-    free(conn->ws_path);
-    freeaddrinfo(conn->ws_addrinfo);
-    free(conn);
+	free(conn->ws_uri);
+	free(conn->ws_host);
+	free(conn->ws_port);
+	free(conn->ws_path);
+	freeaddrinfo(conn->ws_addrinfo);
+	free(conn);
 }
 
 int
 ws_send_msg(ws_conn_t *conn, void *msg, size_t len, uint8_t opcode)
 {
-    uint16_t header;
-    uint16_t len16;
-    uint64_t len64;
-    uint32_t mask = 0;
-    uint8_t payload_len;
+	uint16_t header;
+	uint16_t len16;
+	uint64_t len64;
+	uint32_t mask = 0;
+	uint8_t payload_len;
 
-    if (len > 65535) {
-        header = WS_FIN | WS_MASK | opcode | WS_PAYLOAD_LEN(127);
-        len64 = (uint64_t)htonll(len);
-        xwrite(conn->ws_fd, &header, sizeof(uint16_t));
-        xwrite(conn->ws_fd, &len64, sizeof(uint64_t));
-    } else if (len > 125) {
-        header = WS_FIN | WS_MASK | opcode | WS_PAYLOAD_LEN(126);
-        len16 = (uint16_t)htons(len);
-        xwrite(conn->ws_fd, &header, sizeof(uint16_t));
-        xwrite(conn->ws_fd, &len16, sizeof(uint16_t));
-    } else {
-        header = WS_FIN | WS_MASK | opcode | WS_PAYLOAD_LEN(len);
-        xwrite(conn->ws_fd, &header, sizeof(uint16_t));
-    }
+	if (len > 65535) {
+		header = WS_FIN | WS_MASK | opcode | WS_PAYLOAD_LEN(127);
+		len64 = (uint64_t)htonll(len);
+		xwrite(conn->ws_fd, &header, sizeof(uint16_t));
+		xwrite(conn->ws_fd, &len64, sizeof(uint64_t));
+	} else if (len > 125) {
+		header = WS_FIN | WS_MASK | opcode | WS_PAYLOAD_LEN(126);
+		len16 = (uint16_t)htons(len);
+		xwrite(conn->ws_fd, &header, sizeof(uint16_t));
+		xwrite(conn->ws_fd, &len16, sizeof(uint16_t));
+	} else {
+		header = WS_FIN | WS_MASK | opcode | WS_PAYLOAD_LEN(len);
+		xwrite(conn->ws_fd, &header, sizeof(uint16_t));
+	}
 
-    ws_mask(msg, len, mask);
-    xwrite(conn->ws_fd, &mask, sizeof(uint32_t));
-    xwrite(conn->ws_fd, msg, len);
+	ws_mask(msg, len, mask);
+	xwrite(conn->ws_fd, &mask, sizeof(uint32_t));
+	xwrite(conn->ws_fd, msg, len);
 
-    return (0);
+	return (0);
 }
 
 static void
 ws_mask(char *buf, size_t len, uint32_t key)
 {
-    uint8_t *mask = (uint8_t*)&key;
-    int i;
+	uint8_t *mask = (uint8_t*)&key;
+	int i;
 
-    for (i = 0; i < len; i++)
-        buf[i] ^= mask[i % 4];
+	for (i = 0; i < len; i++)
+		buf[i] ^= mask[i % 4];
 }
 
 int
 ws_recv_msg(ws_conn_t *conn, void **frame, size_t *size, uint8_t *type)
 {
-    uint16_t header;
-    uint16_t len16;
-    uint64_t len64;
-    uint32_t mask;
-    size_t length;
-    size_t total = 0;
+	uint16_t header;
+	uint16_t len16;
+	uint64_t len64;
+	uint32_t mask;
+	size_t length;
+	size_t total = 0;
 
-    for (;;) {
-        if (xread(conn->ws_fd, &header, sizeof(uint16_t)) < 0)
-            return -1;
+	for (;;) {
+		if (xread(conn->ws_fd, &header, sizeof(uint16_t)) < 0)
+			return -1;
 
-        if (WS_PAYLOAD_GET_LEN(header) == 127) {
-            xread(conn->ws_fd, &len64, sizeof(uint64_t));
-            length = (size_t)ntohl(len64);
-        } else if (WS_PAYLOAD_GET_LEN(header) == 126) {
-            xread(conn->ws_fd, &len16, sizeof(uint16_t));
-            length = (size_t)ntohs(len16);
-        } else
-            length = (size_t) WS_PAYLOAD_GET_LEN(header);
+		if (WS_PAYLOAD_GET_LEN(header) == 127) {
+			xread(conn->ws_fd, &len64, sizeof(uint64_t));
+			length = (size_t)ntohl(len64);
+		} else if (WS_PAYLOAD_GET_LEN(header) == 126) {
+			xread(conn->ws_fd, &len16, sizeof(uint16_t));
+			length = (size_t)ntohs(len16);
+		} else
+			length = (size_t) WS_PAYLOAD_GET_LEN(header);
 
 
-        *frame = realloc(*frame, length);
-        total += length;
+		*frame = realloc(*frame, length);
+		total += length;
 
-        xread(conn->ws_fd, *frame, length);
+		xread(conn->ws_fd, *frame, length);
 
-        if (header & WS_FIN)
-            break;
-    }
+		if (header & WS_FIN)
+			break;
+	}
 
-    if (type)
-        *type = (uint8_t)(header & 0x7f);
-    
-    *size = total;
-    return (0);
+	if (type)
+		*type = (uint8_t)(header & 0x7f);
+	
+	*size = total;
+	return (0);
 }
 
 static void
 ws_process_msg(ws_conn_t *conn, void *frame, size_t size)
 {
-    conn->ws_message_handler(conn, frame, size, conn->ws_message_handler_arg);
+	conn->ws_message_handler(conn, frame, size,
+	    conn->ws_message_handler_arg);
 }
 
 static void *
 ws_event_loop(void *arg)
 {
-    ws_conn_t *conn = (ws_conn_t *)arg;
-    struct kevent event;
-    struct kevent change;
-    int i, evs;
-    int kq = kqueue();
-    void *frame;
-    size_t size;
+	ws_conn_t *conn = (ws_conn_t *)arg;
+	struct kevent event;
+	struct kevent change;
+	int i, evs;
+	int kq = kqueue();
+	void *frame;
+	size_t size;
 
-    EV_SET(&change, conn->ws_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+	EV_SET(&change, conn->ws_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
 
-    for (;;) {
-        evs = kevent(kq, &change, 1, &event, 1, NULL);
-        if (evs < 0) {
+	for (;;) {
+		evs = kevent(kq, &change, 1, &event, 1, NULL);
+		if (evs < 0) {
 
-        }
+		}
 
-        for (i = 0; i < evs; i++) {
-            if (event.ident == conn->ws_fd) {
-                if (event.flags & EV_EOF)
-                    return NULL;
+		for (i = 0; i < evs; i++) {
+			if (event.ident == conn->ws_fd) {
+				if (event.flags & EV_EOF)
+					return NULL;
 
-                if (ws_recv_msg(conn, &frame, &size, NULL) < 0)
-                    continue;
+				if (ws_recv_msg(conn, &frame, &size, NULL) < 0)
+					continue;
 
-                ws_process_msg(conn, frame, size);
-            }
-        }
-    }
+				ws_process_msg(conn, frame, size);
+			}
+		}
+	}
 }
 
 int
 ws_get_fd(ws_conn_t *conn)
 {
-    return conn->ws_fd;
+	return conn->ws_fd;
 }

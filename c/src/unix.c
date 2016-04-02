@@ -43,123 +43,125 @@ static void *unix_event_loop(void *);
 unix_conn_t *
 unix_connect(const char *path)
 {
-    struct sockaddr_un sun;
-    unix_conn_t *conn;
+	struct sockaddr_un sun;
+	unix_conn_t *conn;
 
-    conn = xmalloc(sizeof(unix_conn_t));
-    conn->unix_path = strdup(path);
+	conn = xmalloc(sizeof(unix_conn_t));
+	conn->unix_path = strdup(path);
 
-    sun.sun_family = AF_UNIX;
-    sun.sun_len = sizeof(struct sockaddr_un);
-    strncpy(sun.sun_path, path, sizeof(sun.sun_path));
+	sun.sun_family = AF_UNIX;
+	sun.sun_len = sizeof(struct sockaddr_un);
+	strncpy(sun.sun_path, path, sizeof(sun.sun_path));
 
-    conn->unix_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (conn->unix_fd < 0)
-        goto fail;
+	conn->unix_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (conn->unix_fd < 0)
+		goto fail;
 
-    if (connect(conn->unix_fd, (const struct sockaddr *)&sun, sizeof(sun)) < 0)
-        goto fail;
+	if (connect(conn->unix_fd, (const struct sockaddr *)&sun,
+	    sizeof(sun)) < 0)
+		goto fail;
 
-    if (pthread_create(&conn->unix_thread, NULL, unix_event_loop, conn)) {
-        shutdown(conn->unix_fd, SHUT_RDWR);
-        goto fail;
-    }
+	if (pthread_create(&conn->unix_thread, NULL, unix_event_loop, conn)) {
+		shutdown(conn->unix_fd, SHUT_RDWR);
+		goto fail;
+	}
 
-    return (conn);
+	return (conn);
 
 fail:
-    free(conn);
-    return (NULL);
+	free(conn);
+	return (NULL);
 }
 
 void
 unix_close(unix_conn_t *conn)
 {
-    shutdown(conn->unix_fd, SHUT_RDWR);
-    close(conn->unix_fd);
+	shutdown(conn->unix_fd, SHUT_RDWR);
+	close(conn->unix_fd);
 
-    free(conn->unix_path);
-    free(conn);
+	free(conn->unix_path);
+	free(conn);
 }
 
 int
 unix_send_msg(unix_conn_t *conn, void *buf, size_t size)
 {
-    uint32_t header[2];
+	uint32_t header[2];
 
-    header[0] = 0xdeadbeef;
-    header[1] = (uint32_t)size;
+	header[0] = 0xdeadbeef;
+	header[1] = (uint32_t)size;
 
-    if (xwrite(conn->unix_fd, &header, sizeof(uint32_t) * 2) < 0)
-        return (-1);
+	if (xwrite(conn->unix_fd, &header, sizeof(uint32_t) * 2) < 0)
+		return (-1);
 
-    if (xwrite(conn->unix_fd, buf, size) < 0)
-        return (-1);
+	if (xwrite(conn->unix_fd, buf, size) < 0)
+		return (-1);
 
-    return (0);
+	return (0);
 }
 
 int
 unix_recv_msg(unix_conn_t *conn, void **frame, size_t *size)
 {
-    uint32_t header[2];
-    size_t length;
+	uint32_t header[2];
+	size_t length;
 
-    if (xread(conn->unix_fd, &header, sizeof(uint32_t) * 2) < 0)
-        return (-1);
+	if (xread(conn->unix_fd, &header, sizeof(uint32_t) * 2) < 0)
+		return (-1);
 
-    if (header[0] != 0xdeadbeef)
-        return (-1);
+	if (header[0] != 0xdeadbeef)
+		return (-1);
 
-    length = header[1];
-    *frame = malloc(length);
-    *size = length;
+	length = header[1];
+	*frame = malloc(length);
+	*size = length;
 
-    xread(conn->unix_fd, *frame, length);
+	xread(conn->unix_fd, *frame, length);
 
-    return (0);
+	return (0);
 }
 
 int unix_get_fd(unix_conn_t *conn)
 {
-    return (conn->unix_fd);
+	return (conn->unix_fd);
 }
 
 static void
 unix_process_msg(unix_conn_t *conn, void *frame, size_t size)
 {
-    conn->unix_message_handler(conn, frame, size, conn->unix_message_handler_arg);
+	conn->unix_message_handler(conn, frame, size,
+	    conn->unix_message_handler_arg);
 }
 
 static void *
 unix_event_loop(void *arg)
 {
-    unix_conn_t *conn = (unix_conn_t *)arg;
-    struct kevent event;
-    struct kevent change;
-    int i, evs;
-    int kq = kqueue();
-    void *frame;
-    size_t size;
+	unix_conn_t *conn = (unix_conn_t *)arg;
+	struct kevent event;
+	struct kevent change;
+	int i, evs;
+	int kq = kqueue();
+	void *frame;
+	size_t size;
 
-    EV_SET(&change, conn->unix_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+	EV_SET(&change, conn->unix_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
 
-    for (;;) {
-        evs = kevent(kq, &change, 1, &event, 1, NULL);
-        if (evs < 0) {
+	for (;;) {
+		evs = kevent(kq, &change, 1, &event, 1, NULL);
+		if (evs < 0) {
 
-        }
+		}
 
-        for (i = 0; i < evs; i++) {
-            if (event.ident == conn->unix_fd) {
-                if (event.flags & EV_EOF)
-                    return NULL;
+		for (i = 0; i < evs; i++) {
+			if (event.ident == conn->unix_fd) {
+				if (event.flags & EV_EOF)
+					return NULL;
 
-                if (unix_recv_msg(conn, &frame, &size) < 0)
-                    continue;
+				if (unix_recv_msg(conn, &frame, &size) < 0)
+					continue;
 
-                unix_process_msg(conn, frame, size);
-            }
-        }
-    }
+				unix_process_msg(conn, frame, size);
+			}
+		}
+	}
 }

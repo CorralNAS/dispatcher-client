@@ -47,16 +47,16 @@ typedef void (*ws_message_handler_t)(struct ws_conn *, void *, size_t, void *);
 
 typedef struct ws_conn
 {
-    int ws_fd;
-    char *ws_uri;
-    char *ws_host;
-    char *ws_path;
-    char *ws_port;
-    struct addrinfo *ws_addrinfo;
-    pthread_t ws_thread;
-    json_t *ws_headers;
-     ws_message_handler_t ws_message_handler;
-    void *ws_message_handler_arg;
+	int ws_fd;
+	char *ws_uri;
+	char *ws_host;
+	char *ws_path;
+	char *ws_port;
+	struct addrinfo *ws_addrinfo;
+	pthread_t ws_thread;
+	json_t *ws_headers;
+	 ws_message_handler_t ws_message_handler;
+	void *ws_message_handler_arg;
 } ws_conn_t;
 
 ws_conn_t *ws_connect(const char *);

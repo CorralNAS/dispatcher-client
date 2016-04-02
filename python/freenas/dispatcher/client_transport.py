@@ -33,8 +33,10 @@ import paramiko
 import socket
 import time
 import logging
+from threading import RLock, Event
 from freenas.utils import xrecvmsg, xsendmsg
-from freenas.utils.spawn_thread import ClientType, spawn_thread
+from freenas.utils.spawn_thread import spawn_thread
+from ws4py.client.threadedclient import WebSocketClient
 from abc import ABCMeta, abstractmethod
 from six import with_metaclass
 import struct
@@ -43,18 +45,6 @@ import struct
 MAXFDS = 128
 CMSGCRED_SIZE = struct.calcsize('iiiih16i')
 _debug_log_file = None
-
-
-if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
-    from ws4py.client.geventclient import WebSocketClient
-    from gevent.lock import RLock
-    from gevent.event import Event
-    _thread_type = ClientType.GEVENT
-else:
-    from ws4py.client.threadedclient import WebSocketClient
-    from threading import Event
-    from threading import RLock
-    _thread_type = ClientType.THREADED
 
 
 def debug_log(message, *args):
@@ -338,7 +328,7 @@ class ClientTransportSSH(ClientTransportBase):
 
         self.channel = self.ssh.get_transport().open_session()
 
-        recv_t = spawn_thread(target=self.recv, daemon=True)
+        recv_t = spawn_thread(self.recv)
         recv_t.start()
 
     def send(self, message, fds):
@@ -431,8 +421,7 @@ class ClientTransportSock(ClientTransportBase):
                     debug_log('Socket connection exception: {0}', err)
                     raise
 
-        recv_t = spawn_thread(target=self.recv, daemon=True)
-        recv_t.start()
+        spawn_thread(self.recv)
 
     @property
     def address(self):

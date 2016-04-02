@@ -32,25 +32,13 @@ import uuid
 import errno
 import time
 from .jsonenc import dumps, loads
+from threading import RLock, Event
+from queue import Queue
 from freenas.dispatcher import rpc
-from freenas.utils.spawn_thread import ClientType, spawn_thread
+from freenas.utils.spawn_thread import spawn_thread
 from freenas.dispatcher.client_transport import ClientTransportBuilder
 from freenas.dispatcher.fd import FileDescriptor
-from freenas.utils.query import matches
 from ws4py.compat import urlsplit
-
-
-if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
-    from gevent.lock import RLock
-    from gevent.event import Event
-    from gevent.greenlet import Greenlet
-    _thread_type = ClientType.GEVENT
-else:
-    from threading import Thread
-    from threading import Event
-    from threading import RLock
-    from queue import Queue
-    _thread_type = ClientType.THREADED
 
 
 class ClientError(enum.Enum):
@@ -282,13 +270,8 @@ class Client(object):
                     self.__replace_fds(o, fds)
 
     def wait_forever(self):
-        if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
-            import gevent
-            while True:
-                gevent.sleep(60)
-        else:
-            while True:
-                time.sleep(60)
+        while True:
+            time.sleep(60)
 
     def wait_for_call(self, call, timeout=None):
         elapsed = 0
@@ -324,15 +307,13 @@ class Client(object):
 
         if msg['namespace'] == 'events' and msg['name'] == 'event':
             args = msg['args']
-            t = spawn_thread(target=self.__process_event, args=(args['name'], args['args']))
-            t.start()
+            spawn_thread(self.__process_event, args['name'], args['args'], threadpool=True)
             return
 
         if msg['namespace'] == 'events' and msg['name'] == 'event_burst':
             args = msg['args']
             for i in args['events']:
-                t = spawn_thread(target=self.__process_event, args=(i['name'], i['args']))
-                t.start()
+                spawn_thread(self.__process_event, i['name'], i['args'], threadpool=True)
             return
 
         if msg['namespace'] == 'events' and msg['name'] == 'logout':
@@ -362,8 +343,7 @@ class Client(object):
                     else:
                         self.__send_response(msg['id'], result)
 
-                t = spawn_thread(target=run_async, args=(msg, args))
-                t.start()
+                spawn_thread(run_async, msg, args, threadpool=True)
                 return
 
             if msg['name'] == 'response':
@@ -443,8 +423,7 @@ class Client(object):
         debug_log('Connection opened, local address {0}', self.transport.address)
 
         if self.use_bursts:
-            self.event_thread = spawn_thread(target=self.__event_emitter, args=())
-            self.event_thread.start()
+            self.event_thread = spawn_thread(self.__event_emitter)
 
     def login_user(self, username, password, timeout=None, check_password=False, resource=None):
         call = self.PendingCall(uuid.uuid4(), 'auth')
@@ -570,14 +549,14 @@ class Client(object):
         return self.call_sync('task.status', tid)
 
     def call_task_async(self, name, *args, timeout=3600, callback=None):
-        def wait_on_complete(self, tid, timeout, callback):
+        def wait_on_complete(tid):
             self.call_sync('task.wait', tid, timeout=timeout)
             callback(self.call_sync('task.status', tid))
 
         tid = self.call_sync('task.submit', name, list(args))
         if callback:
-            _t = spawn_thread(target=wait_on_complete, args=(self, tid, timeout, callback), daemon=True)
-            _t.start()
+            spawn_thread(wait_on_complete, tid)
+
         return tid
 
     def submit_task(self, name, *args):

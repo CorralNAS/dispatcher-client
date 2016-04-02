@@ -395,12 +395,12 @@ class ClientTransportSSH(ClientTransportBase):
 
 
 class ClientTransportSock(ClientTransportBase):
-
     def __init__(self):
         self.path = '/var/run/dispatcher.sock'
         self.sock = None
         self.parent = None
         self.terminated = False
+        self.creds_sent = False
         self.close_lock = RLock()
         self.wlock = RLock()
 
@@ -444,11 +444,16 @@ class ClientTransportSock(ClientTransportBase):
                 try:
                     header = struct.pack('II', 0xdeadbeef, len(message))
                     message = message.encode('utf-8')
+                    ancdata = []
 
-                    xsendmsg(self.sock, header + message, [
-                        (socket.SOL_SOCKET, socket.SCM_CREDS, bytearray(CMSGCRED_SIZE)),
-                        (socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds]))
-                    ])
+                    if not self.creds_sent:
+                        ancdata.append((socket.SOL_SOCKET, socket.SCM_CREDS, bytearray(CMSGCRED_SIZE)))
+
+                    if fds:
+                        ancdata.append((socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds])))
+
+                    xsendmsg(self.sock, header + message, ancdata)
+                    self.creds_sent = True
 
                     for i in fds:
                         if i.close:

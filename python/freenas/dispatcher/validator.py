@@ -68,7 +68,7 @@ def extend_with_default(validator_class):
         all_validators = dict(validator.VALIDATORS)
         all_validators.update(validators)
         all_types = dict(validator.DEFAULT_TYPES)
-        all_types.update({u"fd": FileDescriptor})
+        all_types.update({"fd": FileDescriptor})
         return create(
             meta_schema=validator.META_SCHEMA,
             validators=all_validators,

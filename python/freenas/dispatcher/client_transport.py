@@ -328,8 +328,7 @@ class ClientTransportSSH(ClientTransportBase):
 
         self.channel = self.ssh.get_transport().open_session()
 
-        recv_t = spawn_thread(self.recv)
-        recv_t.start()
+        spawn_thread(self.recv)
 
     def send(self, message, fds):
         if self.terminated is False:

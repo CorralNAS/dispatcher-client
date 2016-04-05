@@ -60,6 +60,7 @@ struct rpc_call
 	pthread_cond_t      rc_completed;
 	pthread_mutex_t     rc_mtx;
 	rpc_callback_t *    rc_callback;
+	void *              rc_callback_arg;
 	TAILQ_ENTRY(rpc_call) rc_link;
 };
 
@@ -149,6 +150,25 @@ dispatcher_close(connection_t *conn)
 	free(conn);
 }
 
+void
+dispatcher_abort(connection_t *conn)
+{
+	rpc_call_t *call;
+
+	TAILQ_FOREACH(call, &conn->conn_calls, rc_link) {
+		call->rc_status = RPC_CALL_ERROR;
+		call->rc_error = json_pack("{siss}", "code", ECONNABORTED,
+		    "message", "Connection reset");
+
+		if (call->rc_callback != NULL) {
+			call->rc_callback(conn, json_string_value(call->rc_id),
+			    NULL, call->rc_error, call->rc_callback_arg);
+		}
+
+		pthread_cond_broadcast(&call->rc_completed);
+	}
+}
+
 int
 dispatcher_get_fd(connection_t *conn)
 {
@@ -220,6 +240,8 @@ dispatcher_call_async(connection_t *conn, const char *name, json_t *args,
 	call->rc_type = "call";
 	call->rc_method = name;
 	call->rc_args = json_object();
+	call->rc_callback = cb;
+	call->rc_callback_arg = cb_arg;
 
 	TAILQ_INSERT_TAIL(&conn->conn_calls, call, rc_link);
 
@@ -408,6 +430,13 @@ dispatcher_process_rpc(connection_t *conn, json_t *msg)
 			} else {
 				call->rc_status = RPC_CALL_DONE;
 				call->rc_result = json_object_get(msg, "args");
+			}
+
+			if (call->rc_callback != NULL) {
+				call->rc_callback(conn,
+				    json_string_value(call->rc_id),
+				    call->rc_result, call->rc_error,
+				    call->rc_callback_arg);
 			}
 
 			pthread_cond_broadcast(&call->rc_completed);

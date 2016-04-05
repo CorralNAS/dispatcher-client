@@ -58,6 +58,7 @@ typedef void (rpc_callback_t)(connection_t *, const char *, json_t *, json_t *,
     void *);
 
 connection_t *dispatcher_open(const char *);
+void dispatcher_abort(connection_t *);
 void dispatcher_close(connection_t *);
 int dispatcher_get_fd(connection_t *);
 int dispatcher_login_service(connection_t *, const char *);

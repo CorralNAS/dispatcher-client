@@ -178,7 +178,7 @@ ws_handshake(ws_conn_t *conn)
 			break;
 		}
 
-		json_object_set(conn->ws_headers, name, json_string(value));
+		json_object_set_new(conn->ws_headers, name, json_string(value));
 		free(line);
 	}
 
@@ -215,6 +215,7 @@ ws_close(ws_conn_t *conn)
 	shutdown(conn->ws_fd, SHUT_RDWR);
 	close(conn->ws_fd);
 
+	json_decref(conn->ws_headers);
 	free(conn->ws_uri);
 	free(conn->ws_host);
 	free(conn->ws_port);

@@ -83,8 +83,8 @@ http_parse_uri(ws_conn_t *conn, char *uri)
 	}
 
 	struct addrinfo hints = {
-			.ai_family = AF_INET,
-			.ai_socktype = SOCK_STREAM
+		.ai_family = AF_INET,
+		.ai_socktype = SOCK_STREAM
 	};
 
 	conn->ws_host = xsubstrdup(uri, match[1].rm_so, match[1].rm_eo);

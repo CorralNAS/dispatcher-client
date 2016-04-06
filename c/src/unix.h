@@ -32,6 +32,7 @@
 #include <pthread.h>
 
 struct unix_conn;
+typedef void (*unix_close_handler_t)(struct unix_conn *, void *);
 typedef void (*unix_message_handler_t)(struct unix_conn *, void *, size_t,
     void *);
 
@@ -42,6 +43,8 @@ typedef struct unix_conn
 	pthread_t unix_thread;
 	unix_message_handler_t unix_message_handler;
 	void *unix_message_handler_arg;
+    	unix_close_handler_t unix_close_handler;
+    	void *unix_close_handler_arg;
 } unix_conn_t;
 
 unix_conn_t *unix_connect(const char *);

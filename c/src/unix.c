@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/event.h>
@@ -121,6 +122,12 @@ unix_recv_msg(unix_conn_t *conn, void **frame, size_t *size)
 	return (0);
 }
 
+void
+unix_abort(unix_conn_t *conn)
+{
+	conn->unix_close_handler(conn, conn->unix_close_handler_arg);
+}
+
 int unix_get_fd(unix_conn_t *conn)
 {
 	return (conn->unix_fd);
@@ -149,13 +156,17 @@ unix_event_loop(void *arg)
 	for (;;) {
 		evs = kevent(kq, &change, 1, &event, 1, NULL);
 		if (evs < 0) {
+			if (errno == EINTR)
+				continue;
 
+			unix_abort(conn);
+			return (NULL);
 		}
 
 		for (i = 0; i < evs; i++) {
 			if (event.ident == conn->unix_fd) {
 				if (event.flags & EV_EOF)
-					return NULL;
+					return (NULL);
 
 				if (unix_recv_msg(conn, &frame, &size) < 0)
 					continue;

@@ -97,6 +97,7 @@ http_parse_uri(ws_conn_t *conn, char *uri)
 		return -1;
 	}
 
+	regfree(&re);
 	return 0;
 }
 
@@ -333,6 +334,8 @@ ws_event_loop(void *arg)
 			if (event.ident == conn->ws_fd) {
 				if (event.flags & EV_EOF)
 					return NULL;
+
+				frame = NULL;
 
 				if (ws_recv_msg(conn, &frame, &size, NULL) < 0)
 					continue;

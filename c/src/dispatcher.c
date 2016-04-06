@@ -255,7 +255,7 @@ dispatcher_call_async(connection_t *conn, const char *name, json_t *args,
 
 	TAILQ_INSERT_TAIL(&conn->conn_calls, call, rc_link);
 
-	json_object_set(call->rc_args, "method", json_string(name));
+	json_object_set_new(call->rc_args, "method", json_string(name));
 	json_object_set(call->rc_args, "args", args);
 	dispatcher_call_internal(conn, "call", call);
 
@@ -378,8 +378,8 @@ dispatcher_pack_msg(const char *ns, const char *name, json_t *id, json_t *args)
 		return (NULL);
 	}
 
-	json_object_set(obj, "namespace", json_string(ns));
-	json_object_set(obj, "name", json_string(name));
+	json_object_set_new(obj, "namespace", json_string(ns));
+	json_object_set_new(obj, "name", json_string(name));
 	json_object_set(obj, "id", id);
 	json_object_set(obj, "args", args);
 
@@ -390,15 +390,20 @@ static int
 dispatcher_send_msg(connection_t *conn, json_t *msg)
 {
 	char *str = json_dumps(msg, 0);
+	int ret;
 
 	if (conn->conn_ws != NULL)
-		return (ws_send_msg(conn->conn_ws, str, strlen(str), WS_TEXT));
+		ret = ws_send_msg(conn->conn_ws, str, strlen(str), WS_TEXT);
+	else if (conn->conn_unix != NULL)
+		ret = unix_send_msg(conn->conn_unix, str, strlen(str));
+	else {
+		errno = ENXIO;
+		ret = -1;
+	}
 
-	if (conn->conn_unix != NULL)
-		return (unix_send_msg(conn->conn_unix, str, strlen(str)));
-
-	errno = ENXIO;
-	return (-1);
+	json_decref(msg);
+	free(str);
+	return (ret);
 }
 
 static void
@@ -415,6 +420,8 @@ dispatcher_process_msg(void *ctx __unused, void *frame, size_t len, void *arg)
 	framestr[len] = '\0';
 
 	msg = json_loads(framestr, 0, &err);
+	free(framestr);
+
 	if (msg == NULL) {
 		if (conn->conn_error_handler)
 			conn->conn_error_handler(conn, INVALID_JSON_RESPONSE,
@@ -480,6 +487,8 @@ dispatcher_process_rpc(connection_t *conn, json_t *msg)
 			    json_object_get(msg, "args"));
 		}
 	}
+
+	json_decref(msg);
 }
 
 static void

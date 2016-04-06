@@ -146,12 +146,7 @@ dispatcher_close(connection_t *conn)
 		unix_close(conn->conn_unix);
 
 	TAILQ_FOREACH_SAFE(call, &conn->conn_calls, rc_link, tmp) {
-		json_decref(call->rc_args);
-		json_decref(call->rc_id);
-		json_decref(call->rc_error);
-		json_decref(call->rc_result);
-		TAILQ_REMOVE(&conn->conn_calls, call, rc_link);
-		free(call);
+		rpc_call_free(call);
 	}
 
 	free(conn);
@@ -218,7 +213,8 @@ int dispatcher_subscribe_event(connection_t *conn, const char *name)
 {
 	json_t *msg;
 
-	msg = dispatcher_pack_msg("events", "subscribe", json_null(), json_pack("[s]", name));
+	msg = dispatcher_pack_msg("events", "subscribe", json_null(),
+	    json_pack("[s]", name));
 	return (dispatcher_send_msg(conn, msg));
 }
 
@@ -226,12 +222,14 @@ int dispatcher_unsubscribe_event(connection_t *conn, const char *name)
 {
 	json_t *msg;
 
-	msg = dispatcher_pack_msg("events", "unsubscribe", json_null(), json_pack("[s]", name));
+	msg = dispatcher_pack_msg("events", "unsubscribe", json_null(),
+	    json_pack("[s]", name));
 	return (dispatcher_send_msg(conn, msg));
 }
 
 int
-dispatcher_call_sync(connection_t *conn, const char *name, json_t *args, json_t **result)
+dispatcher_call_sync(connection_t *conn, const char *name, json_t *args,
+    json_t **result)
 {
 	rpc_call_t *call = dispatcher_call_async(conn, name, args, NULL, NULL);
 	rpc_call_wait(call);
@@ -323,6 +321,18 @@ rpc_call_result(rpc_call_t *call)
 	return call->rc_status ==
 	    RPC_CALL_DONE ? call->rc_result : call->rc_error;
 }
+
+void
+rpc_call_free(rpc_call_t *call)
+{
+	json_decref(call->rc_args);
+	json_decref(call->rc_id);
+	json_decref(call->rc_error);
+	json_decref(call->rc_result);
+	TAILQ_REMOVE(&call->rc_conn->conn_calls, call, rc_link);
+	free(call);
+}
+
 
 static rpc_call_t *
 rpc_call_alloc()

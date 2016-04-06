@@ -78,7 +78,7 @@ struct connection
 	TAILQ_HEAD(rpc_calls_head, rpc_call) conn_calls;
 };
 
-static rpc_call_t *rpc_call_alloc();
+static rpc_call_t *rpc_call_alloc(connection_t *conn);
 static json_t *dispatcher_new_id();
 static int dispatcher_call_internal(connection_t *conn, const char *type,
     struct rpc_call *call);
@@ -172,7 +172,7 @@ dispatcher_login_user(connection_t *conn, const char *user, const char *pwd,
 	json_t *id = dispatcher_new_id();
 	json_t *msg;
 
-	call = rpc_call_alloc();
+	call = rpc_call_alloc(conn);
 	call->rc_id = id;
 	call->rc_type = "auth";
 	call->rc_args = json_object();
@@ -195,7 +195,7 @@ dispatcher_login_service(connection_t *conn, const char *name)
 	json_t *id = dispatcher_new_id();
 	json_t *msg;
 
-	call = rpc_call_alloc();
+	call = rpc_call_alloc(conn);
 	call->rc_id = id;
 	call->rc_type = "auth";
 	call->rc_args = json_object();
@@ -245,7 +245,7 @@ dispatcher_call_async(connection_t *conn, const char *name, json_t *args,
 	json_t *id = dispatcher_new_id();
 	json_t *msg;
 
-	call = rpc_call_alloc();
+	call = rpc_call_alloc(conn);
 	call->rc_id = id;
 	call->rc_type = "call";
 	call->rc_method = name;
@@ -335,7 +335,7 @@ rpc_call_free(rpc_call_t *call)
 
 
 static rpc_call_t *
-rpc_call_alloc()
+rpc_call_alloc(connection_t *conn)
 {
 	rpc_call_t *call;
 
@@ -343,6 +343,7 @@ rpc_call_alloc()
 	memset(call, 0, sizeof(rpc_call_t));
 	pthread_cond_init(&call->rc_completed, NULL);
 	pthread_mutex_init(&call->rc_mtx, NULL);
+	call->rc_conn = conn;
 	return (call);
 }
 

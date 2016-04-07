@@ -312,14 +312,14 @@ rpc_call_wait(rpc_call_t *call)
 int
 rpc_call_success(rpc_call_t *call)
 {
-	return call->rc_status;
+	return (call->rc_status);
 }
 
 json_t *
 rpc_call_result(rpc_call_t *call)
 {
-	return call->rc_status ==
-	    RPC_CALL_DONE ? call->rc_result : call->rc_error;
+	return (call->rc_status ==
+	    RPC_CALL_DONE ? call->rc_result : call->rc_error);
 }
 
 void
@@ -327,8 +327,12 @@ rpc_call_free(rpc_call_t *call)
 {
 	json_decref(call->rc_args);
 	json_decref(call->rc_id);
-	json_decref(call->rc_error);
-	json_decref(call->rc_result);
+	if (call->rc_error != NULL)
+		json_decref(call->rc_error);
+
+	if (call->rc_result != NULL)
+		json_decref(call->rc_result);
+
 	TAILQ_REMOVE(&call->rc_conn->conn_calls, call, rc_link);
 	free(call);
 }
@@ -463,7 +467,7 @@ dispatcher_abort(void *ctx, void *arg)
 static void
 dispatcher_process_rpc(connection_t *conn, json_t *msg)
 {
-	rpc_call_t *call;
+	rpc_call_t *call, *tmp;
 	const char *name;
 	const char *id;
 	bool error;
@@ -472,7 +476,7 @@ dispatcher_process_rpc(connection_t *conn, json_t *msg)
 	error = !strcmp(name, "error");
 	id = json_string_value(json_object_get(msg, "id"));
 
-	TAILQ_FOREACH(call, &conn->conn_calls, rc_link) {
+	TAILQ_FOREACH_SAFE(call, &conn->conn_calls, rc_link, tmp) {
 		if (!strcmp(id, json_string_value(call->rc_id))) {
 			if (error) {
 				call->rc_status = RPC_CALL_ERROR;
@@ -515,6 +519,8 @@ static void
 dispatcher_answer_call(rpc_call_t *call, enum rpc_call_status status,
     json_t *result)
 {
+	json_incref(result);
+
 	if (status == RPC_CALL_ERROR) {
 		call->rc_status = RPC_CALL_ERROR;
 		call->rc_error = result;

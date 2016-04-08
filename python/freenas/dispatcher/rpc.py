@@ -146,6 +146,9 @@ class RpcContext(object):
 
             import logging
 
+            if getattr(func, 'generator', False) and isinstance(result, list):
+                result = iter(result)
+
             if hasattr(result, '__next__'):
                 #
                 # Peek first item out of the iterator to check whether if raises

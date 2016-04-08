@@ -78,7 +78,7 @@ void
 unix_close(unix_conn_t *conn)
 {
 	shutdown(conn->unix_fd, SHUT_RDWR);
-	close(conn->unix_fd);
+	pthread_join(conn->unix_thread, NULL);
 
 	free(conn->unix_path);
 	free(conn);
@@ -160,13 +160,21 @@ unix_event_loop(void *arg)
 				continue;
 
 			unix_abort(conn);
+			close(conn->unix_fd);
 			return (NULL);
 		}
 
 		for (i = 0; i < evs; i++) {
 			if (event.ident == conn->unix_fd) {
-				if (event.flags & EV_EOF)
+				if (event.flags & EV_EOF) {
+					close(conn->unix_fd);
 					return (NULL);
+				}
+
+				if (event.flags & EV_ERROR) {
+					close(conn->unix_fd);
+					return (NULL);
+				}
 
 				if (unix_recv_msg(conn, &frame, &size) < 0)
 					continue;

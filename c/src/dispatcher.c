@@ -538,6 +538,69 @@ dispatcher_answer_call(rpc_call_t *call, enum rpc_call_status status,
 	pthread_cond_broadcast(&call->rc_completed);
 }
 
+struct tm *
+rpc_json_to_timestamp(json_t *json)
+{
+	struct tm *timestamp;
+	const char *str;
+	json_t *val;
+
+	if (json == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	if (!json_is_object(json)) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	val = json_object_get(json, "$date");
+	if (val == NULL) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	str = json_string_value(val);
+	if (str == NULL) {
+		json_decref(val);
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	timestamp = calloc(1, sizeof(struct tm));
+	if (timestamp == NULL) {
+		json_decref(val);
+		errno = ENOMEM;
+		return (NULL);
+	}
+
+	if (strptime(str, "%F %T", timestamp) == NULL) {
+		free(timestamp);
+		json_decref(val);
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	json_decref(val);
+	return (timestamp);
+}
+
+json_t *
+rpc_timestamp_to_json(struct tm *timestamp)
+{
+	json_t *val;
+	char str[64];
+
+	if (strftime(str, sizeof(str) - 1, "%F %T", timestamp) == 0) {
+		errno = EINVAL;
+		return (NULL);
+	}
+
+	val = json_pack("{ss}", "$date", str);
+	return (val);
+}
+
 #if 0
 static void *
 dispatcher_collect_task(void *arg)

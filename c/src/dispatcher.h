@@ -75,5 +75,7 @@ void rpc_call_wait(rpc_call_t *);
 int rpc_call_success(rpc_call_t *);
 json_t *rpc_call_result(rpc_call_t *);
 void rpc_call_free(rpc_call_t *);
+struct tm *rpc_json_to_timestamp(json_t *);
+json_t *rpc_timestamp_to_json(struct tm *);
 
 #endif

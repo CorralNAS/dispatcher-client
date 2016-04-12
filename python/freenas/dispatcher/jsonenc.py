@@ -25,7 +25,7 @@
 #
 #####################################################################
 
-
+import base64
 import json
 import uuid
 from datetime import datetime
@@ -40,6 +40,9 @@ class JsonEncoder(json.JSONEncoder):
         if type(obj) is datetime:
             return {'$date': str(obj)}
 
+        if type(obj) is bytes:
+            return {'$binary': base64.b64encode(obj).decode('ascii')}
+
         if hasattr(obj, '__getstate__'):
             return obj.__getstate__()
 
@@ -47,8 +50,12 @@ class JsonEncoder(json.JSONEncoder):
 
 
 def decode_hook(obj):
-    if len(obj) == 1 and '$date' in obj:
-        return parse(obj['$date'])
+    if len(obj) == 1:
+        if '$date' in obj:
+            return parse(obj['$date'])
+
+        if '$binary' in obj:
+            return base64.b64decode(obj['$binary'])
 
     return obj
 

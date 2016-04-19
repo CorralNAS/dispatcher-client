@@ -303,10 +303,17 @@ dispatcher_on_event(connection_t *conn, event_callback_t *cb, void *arg)
 	conn->conn_event_handler_arg = arg;
 }
 
-void
+int
 rpc_call_wait(rpc_call_t *call)
 {
-	pthread_cond_wait(&call->rc_completed, &call->rc_mtx);
+	return (pthread_cond_wait(&call->rc_completed, &call->rc_mtx));
+}
+
+int
+rpc_call_timedwait(rpc_call_t *call, const struct timespec *abstime)
+{
+	return (pthread_cond_timedwait(&call->rc_completed, &call->rc_mtx,
+	    abstime));
 }
 
 int

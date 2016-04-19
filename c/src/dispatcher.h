@@ -71,7 +71,8 @@ rpc_call_t *dispatcher_call_async(connection_t *, const char *, json_t *,
 int dispatcher_emit_event(connection_t *, const char *, json_t *);
 void dispatcher_on_error(connection_t *, error_callback_t *, void *);
 void dispatcher_on_event(connection_t *, event_callback_t *, void *);
-void rpc_call_wait(rpc_call_t *);
+int rpc_call_wait(rpc_call_t *);
+int rpc_call_timedwait(rpc_call_t *, const struct timespec *);
 int rpc_call_success(rpc_call_t *);
 json_t *rpc_call_result(rpc_call_t *);
 void rpc_call_free(rpc_call_t *);

@@ -443,12 +443,15 @@ dispatcher_process_msg(void *ctx __unused, void *frame, size_t len, void *arg)
 
 	ns = json_string_value(json_object_get(msg, "namespace"));
 
-	if (!strcmp(ns, "rpc"))
+	if (!strcmp(ns, "rpc")) {
 		dispatcher_process_rpc(conn, msg);
+		return;
+	}
 
-	if (!strcmp(ns, "events"))
+	if (!strcmp(ns, "events")) {
 		dispatcher_process_events(conn, msg);
-
+		return;
+	}
 }
 
 void

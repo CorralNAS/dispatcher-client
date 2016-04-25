@@ -26,6 +26,7 @@
 #####################################################################
 
 import errno
+import datetime
 from jsonschema import Draft4Validator
 from jsonschema.validators import create
 from jsonschema.exceptions import ValidationError
@@ -70,9 +71,10 @@ def extend_with_default(validator_class):
         all_types = dict(validator.DEFAULT_TYPES)
         all_types.update({
             "fd": FileDescriptor,
-            "binary": bytes
+            "binary": bytes,
+            "datetime": datetime.datetime
         })
-        
+
         return create(
             meta_schema=validator.META_SCHEMA,
             validators=all_validators,

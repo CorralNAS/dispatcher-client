@@ -48,7 +48,7 @@ class FileClient(object):
                     ret = loads(message.data.decode('utf8'))
                 except ValueError:
                     self.parent.authenticated.set_exception(
-                        RpcException(errno.EINVAL,'Invalid response from server')
+                        RpcException(errno.EINVAL, 'Invalid response from server')
                     )
                     return
 

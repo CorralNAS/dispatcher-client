@@ -91,6 +91,9 @@ def extend_with_default(validator_class):
             if "default" in subschema:
                 instance.setdefault(property, subschema["default"])
 
+            if "readOnly" in subschema and getattr(validator, 'remove_read_only', False) is True:
+                instance.pop(property, None)
+
     def oneOf_discriminator(validator, oneOf, instance, schema):
         subschemas = enumerate(oneOf)
         all_errors = []

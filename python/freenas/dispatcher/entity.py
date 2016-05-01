@@ -70,6 +70,9 @@ class EntitySubscriber(object):
         self.listeners = {}
 
     def __on_changed(self, args, event=True):
+        if event:
+            self.ready.wait()
+
         if args['operation'] == 'create':
             self.__add(args['entities'], event)
             return

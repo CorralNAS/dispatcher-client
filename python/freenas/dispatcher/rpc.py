@@ -48,6 +48,7 @@ class RpcContext(object):
         self.schema_definitions = {}
         self.streaming_enabled = False
         self.streaming_burst = 1
+        self.strict_validation = False
         self.register_service('discovery', DiscoveryService)
 
     def register_service(self, name, clazz):
@@ -88,12 +89,22 @@ class RpcContext(object):
                 validator.schema_to_dict(schema),
                 resolver=self.get_schema_resolver(schema))
 
+            if self.strict_validation:
+                val.fail_read_only = True
+            else:
+                val.remove_read_only = True
+
             errors += val.iter_errors(args)
 
         elif type(args) is list:
             val = validator.DefaultDraft4Validator(
                 validator.schema_to_list(schema),
                 resolver=self.get_schema_resolver(schema))
+
+            if self.strict_validation:
+                val.fail_read_only = True
+            else:
+                val.remove_read_only = True
 
             errors += val.iter_errors(args)
         else:

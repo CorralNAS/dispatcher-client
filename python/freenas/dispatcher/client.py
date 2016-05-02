@@ -1,4 +1,4 @@
-#+
+#
 # Copyright 2014 iXsystems, Inc.
 # All rights reserved
 #
@@ -37,7 +37,7 @@ from queue import Queue
 from freenas.dispatcher import rpc
 from freenas.utils.spawn_thread import spawn_thread
 from freenas.dispatcher.client_transport import ClientTransportBuilder
-from freenas.dispatcher.fd import FileDescriptor
+from freenas.dispatcher.fd import FileDescriptor, replace_fds, collect_fds
 from ws4py.compat import urlsplit
 
 
@@ -131,7 +131,7 @@ class Client(object):
         self.event_thread = None
 
     def __pack(self, namespace, name, args, id=None):
-        fds = list(self.__collect_fds(args))
+        fds = list(collect_fds(args))
         return dumps({
             'namespace': namespace,
             'name': name,
@@ -231,44 +231,6 @@ class Client(object):
                 with self.event_emission_lock:
                     self.__send_event_burst()
 
-    def __collect_fds(self, obj, start=0):
-        idx = start
-
-        if isinstance(obj, dict):
-            for k, v in list(obj.items()):
-                if isinstance(v, FileDescriptor):
-                    obj[k] = {'$fd': idx}
-                    idx += 1
-                    yield v
-                else:
-                    for x in self.__collect_fds(v, idx):
-                        yield x
-
-        if isinstance(obj, (list, tuple)):
-            for i, o in enumerate(obj):
-                if isinstance(o, FileDescriptor):
-                    obj[i] = {'$fd': idx}
-                    idx += 1
-                    yield o
-                else:
-                    for x in self.__collect_fds(o, idx):
-                        yield x
-
-    def __replace_fds(self, obj, fds):
-        if isinstance(obj, dict):
-            for k, v in list(obj.items()):
-                if isinstance(v, dict) and len(v) == 1 and '$fd' in v:
-                    obj[k] = FileDescriptor(fds[v['$fd']]) if v['$fd'] < len(fds) else None
-                else:
-                    self.__replace_fds(v, fds)
-
-        if isinstance(obj, list):
-            for i, o in enumerate(obj):
-                if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
-                    obj[i] = FileDescriptor(fds[o['$fd']]) if o['$fd'] < len(fds) else None
-                else:
-                    self.__replace_fds(o, fds)
-
     def wait_forever(self):
         while True:
             time.sleep(60)
@@ -295,7 +257,7 @@ class Client(object):
             del self.pending_calls[key]
 
     def decode(self, msg, fds):
-        self.__replace_fds(msg, fds)
+        replace_fds(msg, fds)
 
         if 'namespace' not in msg:
             self.error_callback(ClientError.INVALID_JSON_RESPONSE)
@@ -410,7 +372,7 @@ class Client(object):
     def connect(self, url, **kwargs):
         self.parse_url(url)
         if not self.scheme:
-            self.scheme = kwargs.get('scheme',"ws")
+            self.scheme = kwargs.get('scheme', "ws")
         else:
             if 'scheme' in kwargs:
                 raise ValueError('Connection scheme cannot be delared in both url and arguments.')

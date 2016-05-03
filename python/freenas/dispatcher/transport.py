@@ -543,13 +543,10 @@ class ClientTransportSock(ClientTransport):
 class ServerTransportSock(ServerTransport):
     class UnixSocketHandler(object):
         def __init__(self, server, connfd, address):
-            import types
             self.connfd = connfd
             self.address = address
             self.server = server
-            self.handler = types.SimpleNamespace()
-            self.handler.client_address = ("unix", 0)
-            self.handler.server = server
+            self.client_address = ("unix", 0)
             self.conn = None
             self.wlock = RLock()
 
@@ -612,7 +609,7 @@ class ServerTransportSock(ServerTransport):
                     for cmsg_level, cmsg_type, cmsg_data in ancdata:
                         if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_CREDS:
                             pid, uid, euid, gid = struct.unpack('iiii', cmsg_data[:struct.calcsize('iiii')])
-                            self.handler.client_address = ('unix', pid)
+                            self.client_address = ('unix', pid)
                             self.conn.credentials = {
                                 'pid': pid,
                                 'uid': uid,
@@ -641,8 +638,8 @@ class ServerTransportSock(ServerTransport):
                 except OSError:
                     pass
 
-    def __init__(self, scheme, path):
-        self.path = path
+    def __init__(self, scheme, parsed_url):
+        self.path = parsed_url.path
         self.sockfd = None
         self.backlog = 50
         self.logger = logging.getLogger('UnixSocketServer')

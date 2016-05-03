@@ -31,6 +31,7 @@ import os
 import errno
 import paramiko
 import socket
+import select
 import time
 import logging
 from threading import RLock, Event
@@ -566,7 +567,10 @@ class ServerTransportSock(ServerTransport):
                     if fds:
                         ancdata.append((socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds])))
 
-                    #wait_write(fd, 10)
+                    r, w, x = select.select([], [fd], [], 10)
+                    if fd not in w:
+                        raise OSError(errno.ETIMEDOUT, 'Operation timed out')
+
                     xsendmsg(self.connfd, header + data, ancdata)
                     for i in fds:
                         if i.close:

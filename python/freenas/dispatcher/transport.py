@@ -107,17 +107,17 @@ class ClientTransport(object):
         return wrapper
 
     def connect(self, url, parent, **kwargs):
-        pass
+        raise NotImplementedError()
 
     @property
     def address(self):
         return None
 
     def send(self, message, fds):
-        pass
+        raise NotImplementedError()
 
     def close(self):
-        pass
+        raise NotImplementedError()
 
 
 class ServerTransport(object):
@@ -145,6 +145,9 @@ class ServerTransport(object):
             return c
 
         return wrapper
+
+    def serve_forever(self, server):
+        raise NotImplementedError()
 
 
 @ClientTransport.register('ws', 'http')

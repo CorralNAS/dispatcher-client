@@ -419,8 +419,8 @@ class Client(Connection):
         self.drop_pending_calls()
         self.transport.close()
 
-    def enable_server(self):
-        self.rpc = rpc.RpcContext()
+    def enable_server(self, rpc=None):
+        self.rpc = rpc or rpc.RpcContext()
 
     def on_event(self, callback):
         self.event_callback = callback

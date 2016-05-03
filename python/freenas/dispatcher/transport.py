@@ -81,19 +81,13 @@ paramiko.SSHClient.exec_command = _patched_exec_command
 
 
 class ClientTransport(object):
-    def __new__(cls, *args, **kwargs):
-        CLIENT_TRANSPORTS = {
-            'ws': ClientTransportWS,
-            'http': ClientTransportWS,
-            'ssh': ClientTransportSSH,
-            'ws+ssh': ClientTransportSSH,
-            'unix': ClientTransportSock
-        }
+    transports = {}
 
+    def __new__(cls, *args, **kwargs):
         if cls is ClientTransport:
             scheme = args[0]
             try:
-                impl = CLIENT_TRANSPORTS[scheme]
+                impl = ClientTransport.transports[scheme]
             except KeyError:
                 raise ValueError('Unknown transport for scheme {0}'.format(scheme))
 
@@ -101,6 +95,16 @@ class ClientTransport(object):
             return i
         else:
             super(ClientTransport, cls).__new__(cls)
+
+    @classmethod
+    def register(cls, *schemas):
+        def wrapper(c):
+            for i in schemas:
+                cls.transports[i] = c
+
+            return c
+
+        return wrapper
 
     def connect(self, url, parent, **kwargs):
         pass
@@ -117,15 +121,13 @@ class ClientTransport(object):
 
 
 class ServerTransport(object):
-    def __new__(cls, *args, **kwargs):
-        SERVER_TRANSPORTS = {
-            'unix': ServerTransportSock
-        }
+    transports = {}
 
+    def __new__(cls, *args, **kwargs):
         if cls is ServerTransport:
             scheme = args[0]
             try:
-                impl = SERVER_TRANSPORTS[scheme]
+                impl = ServerTransport.transports[scheme]
             except KeyError:
                 raise ValueError('Unknown transport for scheme {0}'.format(scheme))
 
@@ -134,7 +136,18 @@ class ServerTransport(object):
         else:
             super(ServerTransport, cls).__new__(cls)
 
+    @classmethod
+    def register(cls, *schemas):
+        def wrapper(c):
+            for i in schemas:
+                cls.transports[i] = c
 
+            return c
+
+        return wrapper
+
+
+@ClientTransport.register('ws', 'http')
 class ClientTransportWS(ClientTransport):
     class WebSocketHandler(WebSocketClient):
         def __init__(self, url, parent):
@@ -234,6 +247,7 @@ class ClientTransportWS(ClientTransport):
         return self.opened.is_set()
 
 
+@ClientTransport.register('ssh', 'ws+ssh')
 class ClientTransportSSH(ClientTransport):
     def __init__(self, scheme):
         self.ssh = None
@@ -404,6 +418,7 @@ class ClientTransportSSH(ClientTransport):
         return self.ssh.get_host_keys()
 
 
+@ClientTransport.register('unix')
 class ClientTransportSock(ClientTransport):
     def __init__(self, scheme):
         self.path = '/var/run/dispatcher.sock'
@@ -521,6 +536,7 @@ class ClientTransportSock(ClientTransport):
                 self.parent.on_close('Going away')
 
 
+@ServerTransport.register('unix')
 class ServerTransportSock(ServerTransport):
     class UnixSocketHandler(object):
         def __init__(self, server, connfd, address):

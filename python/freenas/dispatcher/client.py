@@ -85,8 +85,8 @@ class StreamingResultIterator(object):
 
 
 class Connection(object):
-    def __init__(self, transport):
-        self.transport = transport
+    def __init__(self):
+        self.transport = None
         self.rlock = RLock()
 
     def pack(self, namespace, name, args, id=None):

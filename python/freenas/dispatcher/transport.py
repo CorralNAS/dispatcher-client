@@ -118,7 +118,21 @@ class ClientTransport(object):
 
 class ServerTransport(object):
     def __new__(cls, *args, **kwargs):
-        pass
+        SERVER_TRANSPORTS = {
+            'unix': ServerTransportSock
+        }
+
+        if cls is ServerTransport:
+            scheme = args[0]
+            try:
+                impl = SERVER_TRANSPORTS[scheme]
+            except KeyError:
+                raise ValueError('Unknown transport for scheme {0}'.format(scheme))
+
+            i = object.__new__(impl)
+            return i
+        else:
+            super(ServerTransport, cls).__new__(cls)
 
 
 class ClientTransportWS(ClientTransport):
@@ -507,7 +521,7 @@ class ClientTransportSock(ClientTransport):
                 self.parent.on_close('Going away')
 
 
-class ServerTransportSock(object):
+class ServerTransportSock(ServerTransport):
     class UnixSocketHandler(object):
         def __init__(self, server, connfd, address):
             import types
@@ -536,7 +550,7 @@ class ServerTransportSock(object):
                     if fds:
                         ancdata.append((socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds])))
 
-                    wait_write(fd, 10)
+                    #wait_write(fd, 10)
                     xsendmsg(self.connfd, header + data, ancdata)
                     for i in fds:
                         if i.close:
@@ -551,7 +565,6 @@ class ServerTransportSock(object):
                         self.connfd.shutdown(socket.SHUT_RDWR)
 
         def handle_connection(self):
-            self.conn = ServerConnection(self, self.dispatcher)
             self.conn.on_open()
 
             while True:
@@ -609,9 +622,8 @@ class ServerTransportSock(object):
                 except OSError:
                     pass
 
-    def __init__(self, path, dispatcher):
+    def __init__(self, scheme, path):
         self.path = path
-        self.dispatcher = dispatcher
         self.sockfd = None
         self.backlog = 50
         self.logger = logging.getLogger('UnixSocketServer')
@@ -621,14 +633,14 @@ class ServerTransportSock(object):
         for i in self.connections:
             i.emit_event(event, args)
 
-    def serve_forever(self):
+    def serve_forever(self, server):
         try:
             if os.path.exists(self.path):
                 os.unlink(self.path)
 
             self.sockfd = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.sockfd.bind(self.path)
-            os.chmod(self.path, 775)
+            os.chmod(self.path, 0o775)
             self.sockfd.listen(self.backlog)
         except OSError as err:
             self.logger.error('Cannot start socket server: {0}'.format(str(err)))
@@ -642,4 +654,5 @@ class ServerTransportSock(object):
                 continue
 
             handler = self.UnixSocketHandler(self, fd, addr)
-            gevent.spawn(handler.handle_connection)
+            handler.conn = server.on_connection(handler)
+            spawn_thread(handler.handle_connection, threadpool=True)

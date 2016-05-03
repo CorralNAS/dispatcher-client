@@ -48,6 +48,8 @@
 #include "unix.h"
 #include "dispatcher.h"
 
+#define BUFSIZE 256
+
 struct rpc_call
 {
 	connection_t *      rc_conn;
@@ -96,13 +98,20 @@ static void dispatcher_answer_call(rpc_call_t *call,
 connection_t *
 dispatcher_open(const char *hostname)
 {
+	char schema[BUFSIZE];
+	char netloc[BUFSIZE];
 	char *uri;
 
 	connection_t *conn = calloc(1, sizeof(connection_t));
 	TAILQ_INIT(&conn->conn_calls);
 
-	if (strncmp(hostname, "unix", sizeof("unix")) == 0) {
-		conn->conn_unix = unix_connect("/var/run/dispatcher.sock");
+	if (sscanf("%s://%[^/:]", hostname, schema, netloc) < 2) {
+		free(conn);
+		return (NULL);
+	}
+
+	if (strncmp(schema, "unix", sizeof("unix")) == 0) {
+		conn->conn_unix = unix_connect(netloc);
 		if (conn->conn_unix == NULL) {
 			free(conn);
 			return (NULL);

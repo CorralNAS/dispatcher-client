@@ -85,14 +85,22 @@ class StreamingResultIterator(object):
 
 
 class Connection(object):
+    def __init__(self, transport):
+        self.transport = transport
+        self.rlock = RLock()
+
     def pack(self, namespace, name, args, id=None):
         fds = list(collect_fds(args))
-        return dumps({
-            'namespace': namespace,
-            'name': name,
-            'args': args,
-            'id': str(id if id is not None else uuid.uuid4())
-        }), fds
+        try:
+            result = dumps({
+                'namespace': namespace,
+                'name': name,
+                'args': args,
+                'id': str(id if id is not None else uuid.uuid4())
+            })
+            return result, fds
+        except UnicodeEncodeError:
+            raise
 
     def call(self, pending_call, call_type='call', custom_payload=None):
         if custom_payload is None:
@@ -107,19 +115,19 @@ class Connection(object):
             pending_call.queue = Queue()
             pending_call.result = StreamingResultIterator(pending_call.queue)
 
-        self.send(*self.pack(
+        self.send(
             'rpc',
             call_type,
             payload,
             pending_call.id
-        ))
+        )
 
     def send_event(self, name, params):
-        self.send(*self.pack(
+        self.send(
             'events',
             'event',
             {'name': name, 'args': params}
-        ))
+        )
 
     def send_error(self, id, errno, msg, extra=None):
         payload = {
@@ -130,17 +138,24 @@ class Connection(object):
         if extra is not None:
             payload.update(extra)
 
-        self.send(*self.pack('rpc', 'error', id=id, args=payload))
+        self.send('rpc', 'error', id=id, args=payload)
+
+    def send_call(self, id, method, args):
+        self.send('rpc', 'call', id=id, args={'method': method, 'args': args})
 
     def send_response(self, id, resp):
-        self.send(*self.pack('rpc', 'response', id=id, args=resp))
+        self.send('rpc', 'response', id=id, args=resp)
 
-    def send(self, data, fds=None):
+    def send(self, *args, **kwargs):
+        self.send_raw(*self.pack(*args, **kwargs))
+
+    def send_raw(self, data, fds=None):
         if not fds:
             fds = []
 
         debug_log('<- {0} [{1}]', data, fds)
-        self.transport.send(data, fds)
+        with self.rlock:
+            self.transport.send(data, fds)
 
     def on_open(self):
         pass
@@ -432,10 +447,10 @@ class Client(Connection):
         self.error_callback = callback
 
     def subscribe_events(self, *masks):
-        self.send(*self.pack('events', 'subscribe', masks))
+        self.send('events', 'subscribe', masks)
 
     def unsubscribe_events(self, *masks):
-        self.send(*self.pack('events', 'unsubscribe', masks))
+        self.send('events', 'unsubscribe', masks)
 
     def register_service(self, name, impl):
         if self.rpc is None:

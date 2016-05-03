@@ -37,7 +37,7 @@ from queue import Queue
 from freenas.dispatcher import rpc
 from freenas.utils.spawn_thread import spawn_thread
 from freenas.dispatcher.transport import ClientTransport
-from freenas.dispatcher.fd import FileDescriptor, replace_fds, collect_fds
+from freenas.dispatcher.fd import replace_fds, collect_fds
 from ws4py.compat import urlsplit
 
 

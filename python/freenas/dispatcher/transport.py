@@ -61,9 +61,11 @@ def debug_log(message, *args):
         _debug_log_file.flush()
 
 
-def _patched_exec_command(self, command, bufsize=-1, timeout=None, get_pty=False, stdin_binary=True,
-                          stdout_binary=False, stderr_binary=False):
-
+def _patched_exec_command(
+    self, command, bufsize=-1,
+    timeout=None, get_pty=False, stdin_binary=True,
+    stdout_binary=False, stderr_binary=False
+):
     chan = self._transport.open_session()
     if get_pty:
         chan.get_pty()
@@ -74,42 +76,52 @@ def _patched_exec_command(self, command, bufsize=-1, timeout=None, get_pty=False
     stderr = chan.makefile_stderr('rb' if stdin_binary else 'r', bufsize)
     return stdin, stdout, stderr
 
+
 paramiko.SSHClient.exec_command = _patched_exec_command
 
 
-class ClientTransportBuilder(object):
-    def create(self, scheme):
-        if 'ssh' in scheme:
-            return ClientTransportSSH()
-        elif 'ws' in scheme:
-            return ClientTransportWS()
-        elif 'unix' in scheme:
-            return ClientTransportSock()
+class ClientTransport(object):
+    def __new__(cls, *args, **kwargs):
+        CLIENT_TRANSPORTS = {
+            'ws': ClientTransportWS,
+            'http': ClientTransportWS,
+            'ssh': ClientTransportSSH,
+            'ws+ssh': ClientTransportSSH,
+            'unix': ClientTransportSock
+        }
+
+        if cls is ClientTransport:
+            scheme = args[0]
+            try:
+                impl = CLIENT_TRANSPORTS[scheme]
+            except KeyError:
+                raise ValueError('Unknown transport for scheme {0}'.format(scheme))
+
+            i = object.__new__(impl)
+            return i
         else:
-            raise ValueError('Unsupported type of connection scheme.')
+            super(ClientTransport, cls).__new__(cls)
 
-
-class ClientTransportBase(with_metaclass(ABCMeta, object)):
-
-    @abstractmethod
     def connect(self, url, parent, **kwargs):
-        return
+        pass
 
     @property
-    @abstractmethod
     def address(self):
-        return
+        return None
 
-    @abstractmethod
     def send(self, message, fds):
-        return
+        pass
 
-    @abstractmethod
     def close(self):
-        return
+        pass
 
 
-class ClientTransportWS(ClientTransportBase):
+class ServerTransport(object):
+    def __new__(cls, *args, **kwargs):
+        pass
+
+
+class ClientTransportWS(ClientTransport):
     class WebSocketHandler(WebSocketClient):
         def __init__(self, url, parent):
             super(ClientTransportWS.WebSocketHandler, self).__init__(url)
@@ -128,7 +140,7 @@ class ClientTransportWS(ClientTransportBase):
         def received_message(self, message):
             self.parent.parent.on_message(message.data)
 
-    def __init__(self):
+    def __init__(self, scheme):
         self.parent = None
         self.scheme_default_port = None
         self.ws = None
@@ -208,8 +220,8 @@ class ClientTransportWS(ClientTransportBase):
         return self.opened.is_set()
 
 
-class ClientTransportSSH(ClientTransportBase):
-    def __init__(self):
+class ClientTransportSSH(ClientTransport):
+    def __init__(self, scheme):
         self.ssh = None
         self.channel = None
         self.url = None
@@ -378,8 +390,8 @@ class ClientTransportSSH(ClientTransportBase):
         return self.ssh.get_host_keys()
 
 
-class ClientTransportSock(ClientTransportBase):
-    def __init__(self):
+class ClientTransportSock(ClientTransport):
+    def __init__(self, scheme):
         self.path = '/var/run/dispatcher.sock'
         self.sock = None
         self.parent = None

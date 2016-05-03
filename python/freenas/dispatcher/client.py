@@ -36,7 +36,7 @@ from threading import RLock, Event
 from queue import Queue
 from freenas.dispatcher import rpc
 from freenas.utils.spawn_thread import spawn_thread
-from freenas.dispatcher.client_transport import ClientTransportBuilder
+from freenas.dispatcher.transport import ClientTransport
 from freenas.dispatcher.fd import FileDescriptor, replace_fds, collect_fds
 from ws4py.compat import urlsplit
 
@@ -373,13 +373,12 @@ class Client(Connection):
         if self.scheme is "http":
             self.scheme = "ws"
 
-        builder = ClientTransportBuilder()
-        self.transport = builder.create(self.scheme)
+        self.transport = ClientTransport(self.parsed_url.scheme)
         self.transport.connect(self.parsed_url, self, **kwargs)
         debug_log('Connection opened, local address {0}', self.transport.address)
 
         if self.use_bursts:
-            self.event_thread = spawn_thread(self.__eveclientnt_emitter)
+            self.event_thread = spawn_thread(self.__event_emitter)
 
     def login_user(self, username, password, timeout=None, check_password=False, resource=None):
         call = self.PendingCall(uuid.uuid4(), 'auth')

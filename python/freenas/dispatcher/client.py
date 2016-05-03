@@ -165,7 +165,7 @@ class Connection(object):
 
     def on_message(self, message, *args, **kwargs):
         fds = kwargs.pop('fds', [])
-        debug_log('-> {1}', str(message))
+        debug_log('-> {0}', str(message))
 
         if not type(message) is bytes:
             return
@@ -351,14 +351,13 @@ class Client(Connection):
 
         def run_async(id, args):
             try:
-                result = self.rpc.dispatch_call(data['method'], data['args'], sender=self)
+                result = self.rpc.dispatch_call(args['method'], args['args'], sender=self)
             except rpc.RpcException as err:
                 self.send_error(id, err.code, err.message)
             else:
                 self.send_response(id, result)
 
         spawn_thread(run_async, id, data, threadpool=True)
-        return
 
     def on_rpc_error(self, id, data):
         if id in self.pending_calls.keys():

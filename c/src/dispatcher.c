@@ -105,7 +105,7 @@ dispatcher_open(const char *hostname)
 	connection_t *conn = calloc(1, sizeof(connection_t));
 	TAILQ_INIT(&conn->conn_calls);
 
-	if (sscanf("%s://%[^/:]", hostname, schema, netloc) < 2) {
+	if (sscanf(hostname, "%[^:]://%[^:]", schema, netloc) < 2) {
 		free(conn);
 		return (NULL);
 	}

@@ -435,6 +435,9 @@ class Client(Connection):
 
     def enable_server(self, context=None):
         self.rpc = context or rpc.RpcContext()
+        if context and isinstance(context, rpc.RpcContext):
+            for name in context.services:
+                self.call_sync('plugin.register_service', name)
 
     def on_event(self, callback):
         self.event_callback = callback

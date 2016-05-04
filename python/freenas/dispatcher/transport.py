@@ -444,21 +444,26 @@ class ClientTransportSock(ClientTransport):
         if url.path:
             self.path = url.path
 
-        while True:
-            try:
-                self.sock.connect(self.path)
+        try:
+            while True:
+                try:
+                    self.sock.connect(self.path)
 
-                debug_log('Connected to {0}', self.path)
-                break
-            except (socket.error, OSError) as err:
-                if timeout:
-                    timeout -= 1
-                    time.sleep(1)
-                    continue
-                else:
-                    self.close()
-                    debug_log('Socket connection exception: {0}', err)
+                    debug_log('Connected to {0}', self.path)
+                    break
+                except (socket.error, OSError) as err:
+                    if timeout:
+                        timeout -= 1
+                        time.sleep(1)
+                        continue
+                    else:
+                        self.close()
+                        debug_log('Socket connection exception: {0}', err)
                     raise
+        except KeyboardInterrupt:
+            self.close()
+            self.sock.close()
+            raise
 
         spawn_thread(self.recv)
 

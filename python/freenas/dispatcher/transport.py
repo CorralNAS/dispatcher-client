@@ -38,14 +38,14 @@ from threading import RLock, Event
 from freenas.utils import xrecvmsg, xsendmsg
 from freenas.utils.spawn_thread import spawn_thread
 from ws4py.client.threadedclient import WebSocketClient
-from abc import ABCMeta, abstractmethod
-from six import with_metaclass
 import struct
 
 
 MAXFDS = 128
 CMSGCRED_SIZE = struct.calcsize('iiiih16i')
 _debug_log_file = None
+_client_transports = {}
+_server_transports = {}
 
 
 def debug_log(message, *args):
@@ -73,22 +73,40 @@ def _patched_exec_command(
     chan.settimeout(timeout)
     chan.exec_command(command)
     stdin = chan.makefile('wb' if stdin_binary else 'w', bufsize)
-    stdout = chan.makefile('rb' if stdin_binary else 'r', bufsize)
-    stderr = chan.makefile_stderr('rb' if stdin_binary else 'r', bufsize)
+    stdout = chan.makefile('rb' if stdout_binary else 'r', bufsize)
+    stderr = chan.makefile_stderr('rb' if stderr_binary else 'r', bufsize)
     return stdin, stdout, stderr
 
 
 paramiko.SSHClient.exec_command = _patched_exec_command
 
 
-class ClientTransport(object):
-    transports = {}
+def client_transport(*schemas):
+    def wrapper(c):
+        for i in schemas:
+            _client_transports[i] = c
 
+        return c
+
+    return wrapper
+
+
+def server_transport(*schemas):
+    def wrapper(c):
+        for i in schemas:
+            _client_transports[i] = c
+
+        return c
+
+    return wrapper
+
+
+class ClientTransport(object):
     def __new__(cls, *args, **kwargs):
         if cls is ClientTransport:
             scheme = args[0]
             try:
-                impl = ClientTransport.transports[scheme]
+                impl = _client_transports[scheme]
             except KeyError:
                 raise ValueError('Unknown transport for scheme {0}'.format(scheme))
 
@@ -96,16 +114,6 @@ class ClientTransport(object):
             return i
         else:
             super(ClientTransport, cls).__new__(cls)
-
-    @classmethod
-    def register(cls, *schemas):
-        def wrapper(c):
-            for i in schemas:
-                cls.transports[i] = c
-
-            return c
-
-        return wrapper
 
     def connect(self, url, parent, **kwargs):
         raise NotImplementedError()
@@ -122,13 +130,11 @@ class ClientTransport(object):
 
 
 class ServerTransport(object):
-    transports = {}
-
     def __new__(cls, *args, **kwargs):
         if cls is ServerTransport:
             scheme = args[0]
             try:
-                impl = ServerTransport.transports[scheme]
+                impl = _server_transports[scheme]
             except KeyError:
                 raise ValueError('Unknown transport for scheme {0}'.format(scheme))
 
@@ -137,21 +143,11 @@ class ServerTransport(object):
         else:
             super(ServerTransport, cls).__new__(cls)
 
-    @classmethod
-    def register(cls, *schemas):
-        def wrapper(c):
-            for i in schemas:
-                cls.transports[i] = c
-
-            return c
-
-        return wrapper
-
     def serve_forever(self, server):
         raise NotImplementedError()
 
 
-@ClientTransport.register('ws', 'http')
+@client_transport('ws', 'http')
 class ClientTransportWS(ClientTransport):
     class WebSocketHandler(WebSocketClient):
         def __init__(self, url, parent):
@@ -251,7 +247,7 @@ class ClientTransportWS(ClientTransport):
         return self.opened.is_set()
 
 
-@ClientTransport.register('ssh', 'ws+ssh')
+@client_transport('ssh', 'ws+ssh')
 class ClientTransportSSH(ClientTransport):
     def __init__(self, scheme):
         self.ssh = None
@@ -422,7 +418,7 @@ class ClientTransportSSH(ClientTransport):
         return self.ssh.get_host_keys()
 
 
-@ClientTransport.register('unix')
+@client_transport('unix')
 class ClientTransportSock(ClientTransport):
     def __init__(self, scheme):
         self.path = '/var/run/dispatcher.sock'
@@ -545,7 +541,7 @@ class ClientTransportSock(ClientTransport):
                 self.parent.on_close('Going away')
 
 
-@ServerTransport.register('unix')
+@server_transport('unix')
 class ServerTransportSock(ServerTransport):
     class UnixSocketHandler(object):
         def __init__(self, server, connfd, address):

@@ -94,7 +94,7 @@ def client_transport(*schemas):
 def server_transport(*schemas):
     def wrapper(c):
         for i in schemas:
-            _client_transports[i] = c
+            _server_transports[i] = c
 
         return c
 

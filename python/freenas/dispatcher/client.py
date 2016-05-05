@@ -31,8 +31,9 @@ import enum
 import uuid
 import errno
 import time
+import logging
 from .jsonenc import dumps, loads
-from threading import RLock, Event
+from threading import RLock, Event, Condition
 from queue import Queue
 from freenas.dispatcher import rpc
 from freenas.utils.spawn_thread import spawn_thread
@@ -70,13 +71,23 @@ def debug_log(message, *args):
 
 
 class StreamingResultIterator(object):
-    def __init__(self, queue):
-        self.q = queue
+    def __init__(self, client, call):
+        self.client = client
+        self.call = call
+        self.q = call.queue
 
     def __iter__(self):
         return self
 
     def __next__(self):
+        with self.call.cv:
+            # Wait for initial response
+            self.call.cv.wait_for(lambda: self.call.seqno > 0)
+
+        if self.q.empty():
+            # Request new fragment
+            self.client.call_continue(self.call.id, True)
+
         v = self.q.get()
         if not v:
             raise StopIteration
@@ -87,9 +98,13 @@ class StreamingResultIterator(object):
 class Connection(object):
     def __init__(self):
         self.transport = None
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.rlock = RLock()
 
-    def pack(self, namespace, name, args, id=None):
+    def trace(self, msg):
+        pass
+
+    def pack(self, namespace, name, args=None, id=None):
         fds = list(collect_fds(args))
         try:
             result = dumps({
@@ -113,7 +128,7 @@ class Connection(object):
 
         if pending_call.streaming:
             pending_call.queue = Queue()
-            pending_call.result = StreamingResultIterator(pending_call.queue)
+            pending_call.result = StreamingResultIterator(self, pending_call)
 
         self.send(
             'rpc',
@@ -145,6 +160,18 @@ class Connection(object):
 
     def send_response(self, id, resp):
         self.send('rpc', 'response', id=id, args=resp)
+
+    def send_fragment(self, id, seqno, fragment):
+        self.send('rpc', 'fragment', id=id, args={'seqno': seqno, 'fragment': fragment})
+
+    def send_end(self, id, seqno):
+        self.send('rpc', 'end', id=id, args=seqno)
+
+    def send_continue(self, id, seqno):
+        self.send('rpc', 'continue', id=id, args=seqno)
+
+    def send_abort(self, id):
+        self.send('rpc', 'abort', id=id)
 
     def send(self, *args, **kwargs):
         self.send_raw(*self.pack(*args, **kwargs))
@@ -203,6 +230,8 @@ class Client(Connection):
             self.callback = None
             self.streaming = False
             self.queue = None
+            self.seqno = 0
+            self.cv = Condition()
 
     class SubscribedEvent(object):
         def __init__(self, name, *filters):
@@ -310,12 +339,19 @@ class Client(Connection):
             if self.error_callback is not None:
                 self.error_callback(ClientError.SPURIOUS_RPC_RESPONSE, id)
 
-    def on_rpc_response_fragment(self, id, data):
+    def on_rpc_fragment(self, id, data):
+        seqno = data['seqno']
+        data = data['fragment']
+
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
             if call.streaming:
                 for i in data:
                     call.queue.put(i)
+
+                with call.cv:
+                    call.seqno = seqno
+                    call.cv.notify()
             else:
                 if call.result is None:
                     call.result = []
@@ -325,9 +361,12 @@ class Client(Connection):
             if call.streaming and call.callback:
                 call.callback(data)
 
-    def on_rpc_response_end(self, id, data):
+    def on_rpc_end(self, id, data):
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
+            with call.cv:
+                call.seqno = data
+                call.cv.notify()
             if call.streaming:
                 call.queue.put(None)
 
@@ -514,6 +553,14 @@ class Client(Connection):
             raise rpc.RpcException(obj=call.error)
 
         return call.result
+
+    def call_continue(self, id, sync=False):
+        call = self.pending_calls[str(id)]
+        if sync:
+            with call.cv:
+                seqno = call.seqno + 1
+                self.send_continue(id, seqno)
+                call.cv.wait_for(lambda: call.seqno == seqno)
 
     def call_task_sync(self, name, *args, timeout=3600):
         tid = self.call_sync('task.submit', name, list(args))

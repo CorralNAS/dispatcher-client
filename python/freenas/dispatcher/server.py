@@ -122,13 +122,16 @@ class ServerConnection(Connection):
         self.trace('RPC continuation: id={0}, seqno={1}'.format(id, data))
 
         if id not in self.pending_iterators:
+            self.trace('RPC pending call {0} not found'.format(id))
             self.send_error(id, errno.ENOENT, 'Invalid call')
             return
 
         try:
             fragment, seqno = self.pending_iterators[id].advance()
+            self.trace('RPC response fragment: id={0} seqno={1} result={2}'.format(id, seqno, fragment))
             self.send_fragment(id, seqno, fragment)
         except StopIteration as stp:
+            self.trace('RPC response end: id={0} seqno={1}'.format(id, stp.args[0]))
             self.send_end(id, stp.args[0])
             del self.pending_iterators[id]
             return
@@ -137,6 +140,7 @@ class ServerConnection(Connection):
         self.trace('RPC abort: id={0}'.format(id))
 
         if id not in self.pending_iterators:
+            self.trace('RPC pending call {0} not found'.format(id))
             self.send_error(id, errno.ENOENT, 'Invalid call')
             return
 

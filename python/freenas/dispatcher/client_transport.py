@@ -351,7 +351,7 @@ class ClientTransportSSH(ClientTransportBase):
             magic, length = struct.unpack('II', header)
             if magic == 0xbadbeef0:
                 self.close()
-                raise PermissionError('Only wheel group users are allowed to connect to dispatcher')
+                raise PermissionError('Permission denied')
             if magic != 0xdeadbeef:
                 debug_log('Message with wrong magic dropped')
                 continue

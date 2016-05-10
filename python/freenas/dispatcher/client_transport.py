@@ -329,7 +329,6 @@ class ClientTransportSSH(ClientTransportBase):
         self.channel = self.ssh.get_transport().open_session()
 
         spawn_thread(self.recv)
-        spawn_thread(self.get_catcher_errors)
 
     def send(self, message, fds):
         if self.terminated is False:
@@ -350,6 +349,9 @@ class ClientTransportSSH(ClientTransportBase):
                 break
 
             magic, length = struct.unpack('II', header)
+            if magic == 0xbadbeef0:
+                self.close()
+                raise PermissionError('Only wheel group users are allowed to connect to dispatcher')
             if magic != 0xdeadbeef:
                 debug_log('Message with wrong magic dropped')
                 continue
@@ -369,18 +371,16 @@ class ClientTransportSSH(ClientTransportBase):
         if self.parent.error_callback is not None:
             from freenas.dispatcher.client import ClientError
             self.parent.error_callback(ClientError.CONNECTION_CLOSED)
-
-    def close(self):
-        debug_log("Transport connection closed by client.")
-        self.terminated = True
-        self.ssh.close()
-
-    def get_catcher_errors(self):
         out = self.stderr.readlines()
         if len(out):
             debug_log('Error in transport catcher')
             self.closed()
             raise RuntimeError(out)
+
+    def close(self):
+        debug_log("Transport connection closed by client.")
+        self.terminated = True
+        self.ssh.close()
 
     @property
     def address(self):

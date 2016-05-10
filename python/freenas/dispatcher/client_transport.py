@@ -329,6 +329,7 @@ class ClientTransportSSH(ClientTransportBase):
         self.channel = self.ssh.get_transport().open_session()
 
         spawn_thread(self.recv)
+        spawn_thread(self.get_catcher_errors)
 
     def send(self, message, fds):
         if self.terminated is False:
@@ -373,6 +374,13 @@ class ClientTransportSSH(ClientTransportBase):
         debug_log("Transport connection closed by client.")
         self.terminated = True
         self.ssh.close()
+
+    def get_catcher_errors(self):
+        out = self.stderr.readlines()
+        if len(out):
+            debug_log('Error in transport catcher')
+            self.closed()
+            raise RuntimeError(out)
 
     @property
     def address(self):

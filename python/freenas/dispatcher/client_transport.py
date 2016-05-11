@@ -221,6 +221,7 @@ class ClientTransportSSH(ClientTransportBase):
         self.password = None
         self.port = None
         self.pkey = None
+        self.timeout = None
         self.key_filename = None
         self.terminated = False
         self.stdin = None
@@ -277,6 +278,8 @@ class ClientTransportSSH(ClientTransportBase):
 
         self.host_key_file = kwargs.get('host_key_file', None)
 
+        self.timeout = kwargs.get('timeout', 30)
+
         debug_log('Trying to connect to {0}', self.hostname)
 
         try:
@@ -300,7 +303,8 @@ class ClientTransportSSH(ClientTransportBase):
                 password=self.password,
                 pkey=self.pkey,
                 look_for_keys=self.look_for_keys,
-                key_filename=self.key_filename
+                key_filename=self.key_filename,
+                timeout=self.timeout
             )
 
             debug_log('Connected to {0}', self.hostname)

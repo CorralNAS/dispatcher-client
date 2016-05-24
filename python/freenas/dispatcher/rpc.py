@@ -453,6 +453,12 @@ class SchemaHelper(object):
         result['enum'] = values
         return result
 
+    @staticmethod
+    def readonly(sch):
+        result = convert_schema(sch)
+        result['readOnly'] = True
+        return result
+
 
 def convert_schema(sch):
     type_mapping = {
@@ -460,6 +466,7 @@ def convert_schema(sch):
         datetime: 'datetime',
         bytes: 'binary',
         str: 'string',
+        int: 'integer',
         float: 'number',
         bool: 'boolean',
         None: 'null'

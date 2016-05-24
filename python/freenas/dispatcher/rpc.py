@@ -423,7 +423,10 @@ class SchemaHelper(object):
     @staticmethod
     def object(*args, **kwargs):
         required = kwargs.pop('required', None)
-        result = {'type': 'object'}
+        result = {
+            'type': 'object',
+            'additionalProperties': kwargs.pop('additionalProperties', False)
+        }
 
         if 'properties' in kwargs:
             result['properties'] = {n: convert_schema(x) for n, x in kwargs['properties'].items()}

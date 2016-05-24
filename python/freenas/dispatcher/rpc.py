@@ -425,7 +425,7 @@ class SchemaHelper(object):
         required = kwargs.pop('required', None)
         result = {
             'type': 'object',
-            'additionalProperties': kwargs.pop('additionalProperties', False)
+            'additionalProperties': kwargs.pop('additionalProperties', True)
         }
 
         if 'properties' in kwargs:

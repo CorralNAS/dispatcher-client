@@ -421,9 +421,19 @@ class SchemaHelper(object):
 
     @staticmethod
     def object(*args, **kwargs):
+        required = kwargs.pop('required', None)
         result = {'type': 'object'}
+        
         if 'properties' in kwargs:
             result['properties'] = {n: convert_schema(x) for n, x in kwargs['properties'].items()}
+
+        if isinstance(required, str):
+            if required == 'all':
+                result['required'] = [k for k, v in result['properties'].items() if not v.get('readOnly')]
+
+        elif isinstance(required, (list, tuple)):
+            result['required'] = required
+
         return result
 
     @staticmethod

@@ -34,6 +34,7 @@ import traceback
 import hashlib
 import json
 import itertools
+from datetime import datetime
 from freenas.dispatcher import validator
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.utils import iter_chunked
@@ -423,7 +424,7 @@ class SchemaHelper(object):
     def object(*args, **kwargs):
         required = kwargs.pop('required', None)
         result = {'type': 'object'}
-        
+
         if 'properties' in kwargs:
             result['properties'] = {n: convert_schema(x) for n, x in kwargs['properties'].items()}
 
@@ -453,6 +454,8 @@ class SchemaHelper(object):
 def convert_schema(sch):
     type_mapping = {
         FileDescriptor: 'fd',
+        datetime: 'datetime',
+        bytes: 'binary',
         str: 'string',
         float: 'number',
         bool: 'boolean',

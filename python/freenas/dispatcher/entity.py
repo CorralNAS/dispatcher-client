@@ -101,8 +101,8 @@ class EntitySubscriber(object):
 
         for i in items:
             self.items[i['id']] = i
-            for cbf in self.on_add:
-                if callable(cbf) and event:
+            if event:
+                for cbf in self.on_add:
                     cbf(i)
 
             if len(self.items) == self.items.maxsize:
@@ -114,8 +114,8 @@ class EntitySubscriber(object):
 
     def __delete(self, ids, event=True):
         for i in ids:
-            for cbf in self.on_delete:
-                if callable(cbf) and event:
+            if event:
+                for cbf in self.on_delete:
                     cbf(self.items[i])
 
             del self.items[i]
@@ -128,8 +128,8 @@ class EntitySubscriber(object):
 
             self.items[new] = newi
 
-            for cbf in self.on_update:
-                if callable(cbf) and event:
+            if event:
+                for cbf in self.on_update:
                     cbf(oldi, newi)
 
             del self.items[old]
@@ -183,16 +183,13 @@ class EntitySubscriber(object):
 
         self.items[obj['id']] = obj
 
-        update_listeners = 0
-        for cbf in self.on_update:
-            if callable(cbf) and event:
-                update_listeners = 1
+        if event:
+            for cbf in self.on_update:
                 cbf(oldobj, obj)
 
-        if update_listeners:
-            if obj['id'] in self.listeners:
-                for i in self.listeners[obj['id']]:
-                    i.put(('update', oldobj, obj))
+        if obj['id'] in self.listeners:
+            for i in self.listeners[obj['id']]:
+                i.put(('update', oldobj, obj))
 
     def listen(self, id):
         q = Queue(1)

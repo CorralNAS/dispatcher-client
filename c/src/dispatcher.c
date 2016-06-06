@@ -339,6 +339,16 @@ rpc_call_result(rpc_call_t *call)
 	return (call->rc_result);
 }
 
+int
+rpc_call_continue(rpc_call_t *call)
+{
+        json_t *msg;
+
+        msg = dispatcher_pack_msg("rpc", type, call->rc_id, call->rc_args);
+        if (msg == NULL)
+                return (-1);
+}
+
 void
 rpc_call_free(rpc_call_t *call)
 {
@@ -487,28 +497,44 @@ static void
 dispatcher_process_rpc(connection_t *conn, json_t *msg)
 {
 	rpc_call_t *call, *tmp;
+        rpc_call_status_t status;
 	const char *name;
 	const char *id;
-	bool error;
-	bool fragment;
-	bool end;
+	bool response, error, fragment, end;
+        json_t *args, *result;
+        json_int_t seqno = 1;
 
 	name = json_string_value(json_object_get(msg, "name"));
+        response = !strcmp(name, "response");
 	error = !strcmp(name, "error");
 	fragment = !strcmp(name, "fragment");
 	end = !strcmp(name, "end");
 	id = json_string_value(json_object_get(msg, "id"));
+        args = json_object_get(msg, "args");
 
 	TAILQ_FOREACH_SAFE(call, &conn->conn_calls, rc_link, tmp) {
 		if (!strcmp(id, json_string_value(call->rc_id))) {
-			if (error)
-				call->rc_status = RPC_CALL_ERROR;
+                        if (response) {
+                                status = RPC_CALL_DONE;
+                                result = args;
+                        }
 
-			if (fragment)
-				call->rc_status = RPC_CALL_MORE_AVAILABLE;
+			if (error) {
+                                status = RPC_CALL_ERROR;
+                                result = args;
+                        }
 
-			if (end)
-				call->rc_status = RPC_CALL_MORE_AVAILABLE;
+			if (fragment) {
+                                status = RPC_CALL_MORE_AVAILABLE;
+                                result = json_object_get(args, "fragment");
+                                seqno = json_integer_value(json_object_get(
+                                    args, "seqno"));
+                        }
+
+			if (end) {
+                                status = RPC_CALL_DONE;
+                                result = NULL;
+                        }
 
 			call->rc_result = json_object_get(msg, "args");
 			dispatcher_answer_call(call,
@@ -545,6 +571,7 @@ dispatcher_answer_call(rpc_call_t *call, enum rpc_call_status status,
     json_t *result)
 {
 	json_incref(result);
+        pthread_mutex_lock(&call->rc_mtx);
 
         call->rc_status = status;
         call->rc_result = result;
@@ -556,6 +583,7 @@ dispatcher_answer_call(rpc_call_t *call, enum rpc_call_status status,
 	}
 
 	pthread_cond_broadcast(&call->rc_cv);
+        pthread_mutex_unlock(&call->rc_mtx);
 }
 
 struct tm *

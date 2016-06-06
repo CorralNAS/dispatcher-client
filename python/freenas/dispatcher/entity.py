@@ -141,6 +141,7 @@ class EntitySubscriber(object):
         def callback(result):
             self.__add(result, False)
             self.ready.set()
+            return True
 
         self.client.call_async(
             '{0}.query'.format(self.name),

@@ -359,7 +359,8 @@ class Client(Connection):
                 call.result += data
 
             if call.streaming and call.callback:
-                call.callback(data)
+                if call.callback(data):
+                    self.call_continue(id)
 
     def on_rpc_end(self, id, data):
         if id in self.pending_calls.keys():
@@ -556,10 +557,10 @@ class Client(Connection):
 
     def call_continue(self, id, sync=False):
         call = self.pending_calls[str(id)]
-        if sync:
-            with call.cv:
-                seqno = call.seqno + 1
-                self.send_continue(id, seqno)
+        with call.cv:
+            seqno = call.seqno + 1
+            self.send_continue(id, seqno)
+            if sync:
                 call.cv.wait_for(lambda: call.seqno == seqno)
 
     def call_task_sync(self, name, *args, timeout=3600):

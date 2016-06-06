@@ -158,6 +158,7 @@ class Server(object):
         self.parsed_url = None
         self.scheme = None
         self.transport = None
+        self.rpc = None
         self.context = context or RpcContext()
         self.connections = []
 
@@ -179,6 +180,7 @@ class Server(object):
     def on_connection(self, handler):
         conn = self.connection_class(self)
         conn.transport = handler
+        conn.rpc = self.rpc
         return conn
 
     def broadcast_event(self, event, args):

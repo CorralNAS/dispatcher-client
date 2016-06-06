@@ -61,10 +61,10 @@ class EntitySubscriber(object):
         self.name = name
         self.event_handler = None
         self.items = CappedDict(maxsize)
-        self.on_add = None
-        self.on_update = None
-        self.on_delete = None
-        self.on_error = None
+        self.on_add = set()
+        self.on_update = set()
+        self.on_delete = set()
+        self.on_error = set()
         self.remote = False
         self.ready = Event()
         self.listeners = {}
@@ -94,14 +94,16 @@ class EntitySubscriber(object):
             return
 
         if isinstance(items, RpcException):
-            if callable(self.on_error):
-                self.on_error(items)
+            for cbf in self.on_error:
+                if callable(cbf):
+                    cbf(items)
             return
 
         for i in items:
             self.items[i['id']] = i
-            if callable(self.on_add) and event:
-                self.on_add(i)
+            if event:
+                for cbf in self.on_add:
+                    cbf(i)
 
             if len(self.items) == self.items.maxsize:
                 self.remote = True
@@ -112,8 +114,9 @@ class EntitySubscriber(object):
 
     def __delete(self, ids, event=True):
         for i in ids:
-            if callable(self.on_delete) and event:
-                self.on_delete(self.items[i])
+            if event:
+                for cbf in self.on_delete:
+                    cbf(self.items[i])
 
             del self.items[i]
 
@@ -125,8 +128,9 @@ class EntitySubscriber(object):
 
             self.items[new] = newi
 
-            if callable(self.on_update) and event:
-                self.on_update(oldi, newi)
+            if event:
+                for cbf in self.on_update:
+                    cbf(oldi, newi)
 
             del self.items[old]
 
@@ -178,11 +182,14 @@ class EntitySubscriber(object):
             return
 
         self.items[obj['id']] = obj
-        if callable(self.on_update) and event:
-            self.on_update(oldobj, obj)
-            if obj['id'] in self.listeners:
-                for i in self.listeners[obj['id']]:
-                    i.put(('update', oldobj, obj))
+
+        if event:
+            for cbf in self.on_update:
+                cbf(oldobj, obj)
+
+        if obj['id'] in self.listeners:
+            for i in self.listeners[obj['id']]:
+                i.put(('update', oldobj, obj))
 
     def listen(self, id):
         q = Queue(1)

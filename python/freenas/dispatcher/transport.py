@@ -259,6 +259,7 @@ class ClientTransportSSH(ClientTransport):
         self.password = None
         self.port = None
         self.pkey = None
+        self.timeout = None
         self.key_filename = None
         self.terminated = False
         self.stdin = None
@@ -315,6 +316,8 @@ class ClientTransportSSH(ClientTransport):
 
         self.host_key_file = kwargs.get('host_key_file', None)
 
+        self.timeout = kwargs.get('timeout', 30)
+
         debug_log('Trying to connect to {0}', self.hostname)
 
         try:
@@ -338,7 +341,8 @@ class ClientTransportSSH(ClientTransport):
                 password=self.password,
                 pkey=self.pkey,
                 look_for_keys=self.look_for_keys,
-                key_filename=self.key_filename
+                key_filename=self.key_filename,
+                timeout=self.timeout
             )
 
             debug_log('Connected to {0}', self.hostname)
@@ -387,6 +391,9 @@ class ClientTransportSSH(ClientTransport):
                 break
 
             magic, length = struct.unpack('II', header)
+            if magic == 0xbadbeef0:
+                self.close()
+                raise PermissionError('Permission denied')
             if magic != 0xdeadbeef:
                 debug_log('Message with wrong magic dropped')
                 continue
@@ -402,7 +409,16 @@ class ClientTransportSSH(ClientTransport):
         debug_log("Transport connection has been closed abnormally.")
         self.terminated = True
         self.ssh.close()
-        self.parent.on_close('Going away')
+
+        self.parent.drop_pending_calls()
+        if self.parent.error_callback is not None:
+            from freenas.dispatcher.client import ClientError
+            self.parent.error_callback(ClientError.CONNECTION_CLOSED)
+        out = self.stderr.readlines()
+        if len(out):
+            debug_log('Error in transport catcher')
+            self.closed()
+            raise RuntimeError(out)
 
     def close(self):
         debug_log("Transport connection closed by client.")

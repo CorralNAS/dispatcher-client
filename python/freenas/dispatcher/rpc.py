@@ -34,6 +34,7 @@ import traceback
 import hashlib
 import json
 import itertools
+from datetime import datetime
 from freenas.dispatcher import validator
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.utils import iter_chunked
@@ -68,10 +69,10 @@ class RpcContext(object):
         del self.services[name]
 
     def register_schema_definition(self, name, definition):
-        self.schema_definitions['{0}'.format(name)] = definition
+        self.schema_definitions[name] = definition
 
     def unregister_schema_definition(self, name):
-        del self.schema_definitions['{0}'.format(name)]
+        del self.schema_definitions[name]
 
     def get_schema_resolver(self, schema):
         return RefResolver('', schema, self.schema_definitions)
@@ -424,9 +425,22 @@ class SchemaHelper(object):
 
     @staticmethod
     def object(*args, **kwargs):
-        result = {'type': 'object'}
+        required = kwargs.pop('required', None)
+        result = {
+            'type': 'object',
+            'additionalProperties': kwargs.pop('additionalProperties', True)
+        }
+
         if 'properties' in kwargs:
             result['properties'] = {n: convert_schema(x) for n, x in kwargs['properties'].items()}
+
+        if isinstance(required, str):
+            if required == 'all':
+                result['required'] = [k for k, v in result['properties'].items() if not v.get('readOnly')]
+
+        elif isinstance(required, (list, tuple)):
+            result['required'] = required
+
         return result
 
     @staticmethod
@@ -442,11 +456,20 @@ class SchemaHelper(object):
         result['enum'] = values
         return result
 
+    @staticmethod
+    def readonly(sch):
+        result = convert_schema(sch)
+        result['readOnly'] = True
+        return result
+
 
 def convert_schema(sch):
     type_mapping = {
         FileDescriptor: 'fd',
+        datetime: 'datetime',
+        bytes: 'binary',
         str: 'string',
+        int: 'integer',
         float: 'number',
         bool: 'boolean',
         None: 'null'

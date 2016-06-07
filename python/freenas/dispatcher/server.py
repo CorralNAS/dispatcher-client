@@ -180,7 +180,9 @@ class Server(object):
     def on_connection(self, handler):
         conn = self.connection_class(self)
         conn.transport = handler
-        conn.rpc = self.rpc
+        if not conn.rpc:
+            conn.rpc = self.rpc
+
         return conn
 
     def broadcast_event(self, event, args):

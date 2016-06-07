@@ -160,21 +160,16 @@ unix_event_loop(void *arg)
 				continue;
 
 			unix_abort(conn);
-			close(conn->unix_fd);
-			return (NULL);
+			break;
 		}
 
 		for (i = 0; i < evs; i++) {
 			if (event.ident == conn->unix_fd) {
-				if (event.flags & EV_EOF) {
-					close(conn->unix_fd);
-					return (NULL);
-				}
+				if (event.flags & EV_EOF)
+                                        break;
 
-				if (event.flags & EV_ERROR) {
-					close(conn->unix_fd);
-					return (NULL);
-				}
+				if (event.flags & EV_ERROR)
+                                        break;
 
 				if (unix_recv_msg(conn, &frame, &size) < 0)
 					continue;
@@ -183,4 +178,8 @@ unix_event_loop(void *arg)
 			}
 		}
 	}
+
+        close(conn->unix_fd);
+        close(kq);
+        return (NULL);
 }

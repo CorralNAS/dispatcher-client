@@ -160,16 +160,16 @@ unix_event_loop(void *arg)
 				continue;
 
 			unix_abort(conn);
-			break;
+			goto out;
 		}
 
 		for (i = 0; i < evs; i++) {
 			if (event.ident == conn->unix_fd) {
 				if (event.flags & EV_EOF)
-                                        break;
+                                        goto out;
 
 				if (event.flags & EV_ERROR)
-                                        break;
+                                        goto out;
 
 				if (unix_recv_msg(conn, &frame, &size) < 0)
 					continue;
@@ -179,6 +179,7 @@ unix_event_loop(void *arg)
 		}
 	}
 
+out:
         close(conn->unix_fd);
         close(kq);
         return (NULL);

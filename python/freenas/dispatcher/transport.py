@@ -460,7 +460,6 @@ class ClientTransportSock(ClientTransport):
             while True:
                 try:
                     self.sock.connect(self.path)
-
                     debug_log('Connected to {0}', self.path)
                     break
                 except (socket.error, OSError) as err:

@@ -70,6 +70,24 @@ def debug_log(message, *args):
         _debug_log_file.flush()
 
 
+class PendingIterator(object):
+    def __init__(self, iter):
+        self.iter = iter
+        self.seqno = 0
+
+    def advance(self):
+        try:
+            val = next(self.iter)
+        except StopIteration:
+            raise StopIteration(self.seqno + 1)
+
+        self.seqno += 1
+        return val, self.seqno
+
+    def close(self):
+        self.iter.close()
+
+
 class StreamingResultIterator(object):
     def __init__(self, client, call):
         self.client = client
@@ -96,10 +114,72 @@ class StreamingResultIterator(object):
 
 
 class Connection(object):
+    class PendingCall(object):
+        def __init__(self, id, method, args=None):
+            self.id = id
+            self.method = method
+            self.args = list(args) if args is not None else None
+            self.result = None
+            self.error = None
+            self.completed = Event()
+            self.callback = None
+            self.streaming = False
+            self.queue = None
+            self.seqno = 0
+            self.cv = Condition()
+
+    class SubscribedEvent(object):
+        def __init__(self, name, *filters):
+            self.name = name
+            self.refcount = 0
+            self.filters = filters
+
+        def match(self, name, args):
+            if self.name != name:
+                return False
+
+            if self.filters:
+                return match(args, *self.filters)
+
     def __init__(self):
         self.transport = None
         self.logger = logging.getLogger(self.__class__.__name__)
         self.rlock = RLock()
+        self.rpc = None
+        self.streaming = False
+        self.token = None
+        self.pending_iterators = {}
+        self.pending_calls = {}
+        self.default_timeout = 20
+        self.event_callback = None
+        self.error_callback = None
+        self.rpc_callback = None
+        self.pending_events = []
+        self.event_handlers = {}
+        self.event_distribution_lock = RLock()
+        self.event_emission_lock = RLock()
+        self.last_event_burst = None
+        self.use_bursts = False
+        self.event_cv = Event()
+        self.event_thread = None
+
+    def __process_event(self, name, args):
+        with self.event_distribution_lock:
+            if name in self.event_handlers:
+                for h in self.event_handlers[name]:
+                    h(args)
+
+            if self.event_callback:
+                self.event_callback(name, args)
+
+    def __event_emitter(self):
+        while True:
+            self.event_cv.wait()
+
+            while len(self.pending_events) > 0:
+                time.sleep(0.1)
+                with self.event_emission_lock:
+                    self.send_event_burst()
 
     def trace(self, msg):
         pass
@@ -116,6 +196,16 @@ class Connection(object):
             return result, fds
         except UnicodeEncodeError:
             raise
+
+    def wait_for_call(self, call, timeout=None):
+        elapsed = 0
+        while timeout is None or elapsed < timeout:
+            if call.completed.wait(1):
+                return True
+
+            elapsed += 1
+
+        return False
 
     def call(self, pending_call, call_type='call', custom_payload=None):
         if custom_payload is None:
@@ -217,115 +307,6 @@ class Connection(object):
 
         method(message["id"], message["args"])
 
-
-class Client(Connection):
-    class PendingCall(object):
-        def __init__(self, id, method, args=None):
-            self.id = id
-            self.method = method
-            self.args = list(args) if args is not None else None
-            self.result = None
-            self.error = None
-            self.completed = Event()
-            self.callback = None
-            self.streaming = False
-            self.queue = None
-            self.seqno = 0
-            self.cv = Condition()
-
-    class SubscribedEvent(object):
-        def __init__(self, name, *filters):
-            self.name = name
-            self.refcount = 0
-            self.filters = filters
-
-        def match(self, name, args):
-            if self.name != name:
-                return False
-
-            if self.filters:
-                return match(args, *self.filters)
-
-    def __init__(self):
-        super(Client, self).__init__()
-        self.pending_calls = {}
-        self.pending_events = []
-        self.event_handlers = {}
-        self.rpc = None
-        self.event_callback = None
-        self.error_callback = None
-        self.rpc_callback = None
-        self.receive_thread = None
-        self.token = None
-        self.event_distribution_lock = RLock()
-        self.event_emission_lock = RLock()
-        self.default_timeout = 20
-        self.scheme = None
-        self.transport = None
-        self.parsed_url = None
-        self.last_event_burst = None
-        self.use_bursts = False
-        self.event_cv = Event()
-        self.event_thread = None
-
-    def __process_event(self, name, args):
-        with self.event_distribution_lock:
-            if name in self.event_handlers:
-                for h in self.event_handlers[name]:
-                    h(args)
-
-            if self.event_callback:
-                self.event_callback(name, args)
-
-    def __event_emitter(self):
-        while True:
-            self.event_cv.wait()
-
-            while len(self.pending_events) > 0:
-                time.sleep(0.1)
-                with self.event_emission_lock:
-                    self.send_event_burst()
-
-    def wait_forever(self):
-        while True:
-            time.sleep(60)
-
-    def wait_for_call(self, call, timeout=None):
-        elapsed = 0
-        while timeout is None or elapsed < timeout:
-            if call.completed.wait(1):
-                return True
-
-            elapsed += 1
-
-        return False
-
-    def on_close(self, reason):
-        self.drop_pending_calls()
-        if self.error_callback is not None:
-            self.error_callback(ClientError.CONNECTION_CLOSED)
-
-    def drop_pending_calls(self):
-        message = "Connection closed"
-        for key, call in list(self.pending_calls.items()):
-            call.result = None
-            call.error = {
-                "code":  errno.ECONNABORTED,
-                "message": message
-            }
-            call.completed.set()
-            del self.pending_calls[key]
-
-    def on_events_event(self, id, data):
-        spawn_thread(self.__process_event, data['name'], data['args'], threadpool=True)
-
-    def on_events_event_burst(self, id, data):
-        for i in data['events']:
-            spawn_thread(self.__process_event, i['name'], i['args'], threadpool=True)
-
-    def on_events_logout(self, id, data):
-        self.error_callback(ClientError.LOGOUT)
-
     def on_rpc_response(self, id, data):
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
@@ -342,6 +323,8 @@ class Client(Connection):
     def on_rpc_fragment(self, id, data):
         seqno = data['seqno']
         data = data['fragment']
+
+        self.trace('RPC fragment: id={0}, seqno={1}, data={2}'.format(id, seqno, data))
 
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
@@ -363,6 +346,7 @@ class Client(Connection):
                     self.call_continue(id)
 
     def on_rpc_end(self, id, data):
+        self.trace('RPC end: id={0}'.format(id))
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
             with call.cv:
@@ -380,25 +364,6 @@ class Client(Connection):
             call.completed.set()
             del self.pending_calls[str(call.id)]
 
-    def on_rpc_call(self, id, data):
-        if self.rpc is None:
-            self.send_error(id, errno.EINVAL, 'Server functionality is not supported')
-            return
-
-        if 'method' not in data or 'args' not in data:
-            self.send_error(id, errno.EINVAL, 'Malformed request')
-            return
-
-        def run_async(id, args):
-            try:
-                result = self.rpc.dispatch_call(args['method'], args['args'], sender=self)
-            except rpc.RpcException as err:
-                self.send_error(id, err.code, err.message)
-            else:
-                self.send_response(id, result)
-
-        spawn_thread(run_async, id, data, threadpool=True)
-
     def on_rpc_error(self, id, data):
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
@@ -413,26 +378,87 @@ class Client(Connection):
         if self.error_callback is not None:
             self.error_callback(ClientError.RPC_CALL_ERROR)
 
-    def parse_url(self, url):
-        self.parsed_url = urlsplit(url, scheme="http")
-        self.scheme = self.parsed_url.scheme
+    def on_rpc_call(self, id, data):
+        if self.rpc is None:
+            self.send_error(id, errno.EINVAL, 'Server functionality is not supported')
+            return
 
-    def connect(self, url, **kwargs):
-        self.parse_url(url)
-        if not self.scheme:
-            self.scheme = kwargs.get('scheme', "ws")
-        else:
-            if 'scheme' in kwargs:
-                raise ValueError('Connection scheme cannot be delared in both url and arguments.')
-        if self.scheme is "http":
-            self.scheme = "ws"
+        if not isinstance(self.rpc, rpc.RpcContext):
+            self.send_error(id, errno.EINVAL, 'Incompatible context')
+            return
 
-        self.transport = ClientTransport(self.parsed_url.scheme)
-        self.transport.connect(self.parsed_url, self, **kwargs)
-        debug_log('Connection opened, local address {0}', self.transport.address)
+        if 'method' not in data or 'args' not in data:
+            self.send_error(id, errno.EINVAL, 'Malformed request')
+            return
 
-        if self.use_bursts:
-            self.event_thread = spawn_thread(self.__event_emitter)
+        def run_async(id, args):
+            try:
+                result = self.rpc.dispatch_call(
+                    args['method'],
+                    args['args'],
+                    sender=self,
+                    streaming=self.streaming
+                )
+            except rpc.RpcException as err:
+                self.trace('RPC error: id={0} code={0} message={1} extra={2}'.format(
+                    id,
+                    err.code,
+                    err.message,
+                    err.extra
+                ))
+
+                self.send_error(id, err.code, err.message)
+            else:
+                if isinstance(result, rpc.RpcStreamingResponse):
+                    self.pending_iterators[id] = PendingIterator(result)
+                    try:
+                        first, seqno = self.pending_iterators[id].advance()
+                        self.trace('RPC response fragment: id={0} seqno={1} result={2}'.format(id, seqno, first))
+                        self.send_fragment(id, seqno, first)
+                    except StopIteration as stp:
+                        self.trace('RPC response end: id={0}'.format(id))
+                        self.send_end(id, stp.args[0])
+                        del self.pending_iterators[id]
+                        return
+                else:
+                    self.trace('RPC response: id={0} result={1}'.format(id, result))
+                    self.send_response(id, result)
+
+        self.trace('RPC call: id={0} method={1} args={2}'.format(id, data['method'], data['args']))
+        spawn_thread(run_async, id, data, threadpool=True)
+        return
+
+    def on_rpc_continue(self, id, data):
+        self.trace('RPC continuation: id={0}, seqno={1}'.format(id, data))
+
+        if id not in self.pending_iterators:
+            self.trace('RPC pending call {0} not found'.format(id))
+            self.send_error(id, errno.ENOENT, 'Invalid call')
+            return
+
+        try:
+            fragment, seqno = self.pending_iterators[id].advance()
+            self.trace('RPC response fragment: id={0} seqno={1} result={2}'.format(id, seqno, fragment))
+            self.send_fragment(id, seqno, fragment)
+        except StopIteration as stp:
+            self.trace('RPC response end: id={0} seqno={1}'.format(id, stp.args[0]))
+            self.send_end(id, stp.args[0])
+            del self.pending_iterators[id]
+            return
+
+    def on_rpc_abort(self, id, data):
+        self.trace('RPC abort: id={0}'.format(id))
+
+        if id not in self.pending_iterators:
+            self.trace('RPC pending call {0} not found'.format(id))
+            self.send_error(id, errno.ENOENT, 'Invalid call')
+            return
+
+        try:
+            self.pending_iterators[id].close()
+            del self.pending_iterators[id]
+        except BaseException as err:
+            pass
 
     def login_user(self, username, password, timeout=None, check_password=False, resource=None):
         call = self.PendingCall(uuid.uuid4(), 'auth')
@@ -468,16 +494,58 @@ class Client(Connection):
 
         self.token = call.result[0]
 
-    def disconnect(self):
-        debug_log('Closing connection, local address {0}', self.transport.address)
-        self.drop_pending_calls()
-        self.transport.close()
+    def call_async(self, name, callback, *args, **kwargs):
+        call = self.PendingCall(uuid.uuid4(), name, args)
+        call.callback = callback
+        call.streaming = kwargs.pop('streaming', False)
+        self.pending_calls[str(call.id)] = call
+        self.call(call)
+        return call
+
+    def call_sync(self, name, *args, **kwargs):
+        timeout = kwargs.pop('timeout', self.default_timeout)
+        call = self.PendingCall(uuid.uuid4(), name, args)
+        call.streaming = kwargs.pop('streaming', False)
+        self.pending_calls[str(call.id)] = call
+        self.call(call)
+
+        if call.streaming:
+            return call.result
+
+        if not self.wait_for_call(call, timeout):
+            if self.error_callback:
+                self.error_callback(ClientError.RPC_CALL_TIMEOUT, method=call.method, args=call.args)
+
+            raise rpc.RpcException(errno.ETIMEDOUT, 'Call timed out')
+
+        if call.result is None and call.error is not None:
+            raise rpc.RpcException(obj=call.error)
+
+        return call.result
+
+    def call_continue(self, id, sync=False):
+        call = self.pending_calls[str(id)]
+        with call.cv:
+            seqno = call.seqno + 1
+            self.send_continue(id, seqno)
+            if sync:
+                call.cv.wait_for(lambda: call.seqno == seqno)
 
     def enable_server(self, context=None):
         self.rpc = context or rpc.RpcContext()
         if context and isinstance(context, rpc.RpcContext):
             for name in context.services:
                 self.call_sync('plugin.register_service', name)
+
+    def on_events_event(self, id, data):
+        spawn_thread(self.__process_event, data['name'], data['args'], threadpool=True)
+
+    def on_events_event_burst(self, id, data):
+        for i in data['events']:
+            spawn_thread(self.__process_event, i['name'], i['args'], threadpool=True)
+
+    def on_events_logout(self, id, data):
+        self.error_callback(ClientError.LOGOUT)
 
     def on_event(self, callback):
         self.event_callback = callback
@@ -526,43 +594,6 @@ class Client(Connection):
 
         self.call_sync('plugin.unregister_schema', name)
 
-    def call_async(self, name, callback, *args, **kwargs):
-        call = self.PendingCall(uuid.uuid4(), name, args)
-        call.callback = callback
-        call.streaming = kwargs.pop('streaming', False)
-        self.pending_calls[str(call.id)] = call
-        self.call(call)
-        return call
-
-    def call_sync(self, name, *args, **kwargs):
-        timeout = kwargs.pop('timeout', self.default_timeout)
-        call = self.PendingCall(uuid.uuid4(), name, args)
-        call.streaming = kwargs.pop('streaming', False)
-        self.pending_calls[str(call.id)] = call
-        self.call(call)
-
-        if call.streaming:
-            return call.result
-
-        if not self.wait_for_call(call, timeout):
-            if self.error_callback:
-                self.error_callback(ClientError.RPC_CALL_TIMEOUT, method=call.method, args=call.args)
-
-            raise rpc.RpcException(errno.ETIMEDOUT, 'Call timed out')
-
-        if call.result is None and call.error is not None:
-            raise rpc.RpcException(obj=call.error)
-
-        return call.result
-
-    def call_continue(self, id, sync=False):
-        call = self.pending_calls[str(id)]
-        with call.cv:
-            seqno = call.seqno + 1
-            self.send_continue(id, seqno)
-            if sync:
-                call.cv.wait_for(lambda: call.seqno == seqno)
-
     def call_task_sync(self, name, *args, timeout=3600):
         tid = self.call_sync('task.submit', name, list(args))
         self.call_sync('task.wait', tid, timeout=timeout)
@@ -597,6 +628,17 @@ class Client(Connection):
         self.event_handlers[name].append(handler)
         self.subscribe_events(name)
         return handler
+
+    def drop_pending_calls(self):
+        message = "Connection closed"
+        for key, call in list(self.pending_calls.items()):
+            call.result = None
+            call.error = {
+                "code": errno.ECONNABORTED,
+                "message": message
+            }
+            call.completed.set()
+            del self.pending_calls[key]
 
     def unregister_event_handler(self, name, handler):
         self.event_handlers[name].remove(handler)
@@ -638,3 +680,47 @@ class Client(Connection):
     def get_lock(self, name):
         self.call_sync('lock.init', name)
         return rpc.ServerLockProxy(self, name)
+
+
+class Client(Connection):
+    def __init__(self):
+        super(Client, self).__init__()
+        self.receive_thread = None
+        self.scheme = None
+        self.transport = None
+        self.parsed_url = None
+
+    def wait_forever(self):
+        while True:
+            time.sleep(60)
+
+    def on_close(self, reason):
+        self.drop_pending_calls()
+        if self.error_callback is not None:
+            self.error_callback(ClientError.CONNECTION_CLOSED)
+
+    def parse_url(self, url):
+        self.parsed_url = urlsplit(url, scheme="http")
+        self.scheme = self.parsed_url.scheme
+
+    def connect(self, url, **kwargs):
+        self.parse_url(url)
+        if not self.scheme:
+            self.scheme = kwargs.get('scheme', "ws")
+        else:
+            if 'scheme' in kwargs:
+                raise ValueError('Connection scheme cannot be delared in both url and arguments.')
+        if self.scheme is "http":
+            self.scheme = "ws"
+
+        self.transport = ClientTransport(self.parsed_url.scheme)
+        self.transport.connect(self.parsed_url, self, **kwargs)
+        debug_log('Connection opened, local address {0}', self.transport.address)
+
+        if self.use_bursts:
+            self.event_thread = spawn_thread(self.__event_emitter)
+
+    def disconnect(self):
+        debug_log('Closing connection, local address {0}', self.transport.address)
+        self.drop_pending_calls()
+        self.transport.close()

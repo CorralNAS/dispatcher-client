@@ -153,8 +153,11 @@ unix_event_loop(void *arg)
 
 	EV_SET(&change, conn->unix_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
 
+        if (kevent(kq, &change, 1, NULL, 0, NULL) < 0)
+                goto out;
+
 	for (;;) {
-		evs = kevent(kq, &change, 1, &event, 1, NULL);
+		evs = kevent(kq, NULL, 0, &event, 1, NULL);
 		if (evs < 0) {
 			if (errno == EINTR)
 				continue;

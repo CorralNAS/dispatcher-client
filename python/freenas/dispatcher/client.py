@@ -121,10 +121,10 @@ class Connection(object):
             self.args = list(args) if args is not None else None
             self.result = None
             self.error = None
-            self.completed = Event()
+            self.ready = Event()
             self.callback = None
             self.streaming = False
-            self.queue = None
+            self.queue = Queue()
             self.seqno = 0
             self.cv = Condition()
 
@@ -146,7 +146,6 @@ class Connection(object):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.rlock = RLock()
         self.rpc = None
-        self.streaming = False
         self.token = None
         self.pending_iterators = {}
         self.pending_calls = {}
@@ -200,7 +199,7 @@ class Connection(object):
     def wait_for_call(self, call, timeout=None):
         elapsed = 0
         while timeout is None or elapsed < timeout:
-            if call.completed.wait(1):
+            if call.ready.wait(1):
                 return True
 
             elapsed += 1
@@ -215,10 +214,6 @@ class Connection(object):
             }
         else:
             payload = custom_payload
-
-        if pending_call.streaming:
-            pending_call.queue = Queue()
-            pending_call.result = StreamingResultIterator(self, pending_call)
 
         self.send(
             'rpc',
@@ -311,7 +306,7 @@ class Connection(object):
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
             call.result = data
-            call.completed.set()
+            call.ready.set()
             if call.callback is not None:
                 call.callback(data)
 
@@ -328,20 +323,16 @@ class Connection(object):
 
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
-            if call.streaming:
+            call.result = StreamingResultIterator(self, call)
+
+            with call.cv:
                 for i in data:
                     call.queue.put(i)
+                call.seqno = seqno
+                call.cv.notify()
+                call.ready.set()
 
-                with call.cv:
-                    call.seqno = seqno
-                    call.cv.notify()
-            else:
-                if call.result is None:
-                    call.result = []
-
-                call.result += data
-
-            if call.streaming and call.callback:
+            if call.callback:
                 if call.callback(data):
                     self.call_continue(id)
 
@@ -361,7 +352,7 @@ class Connection(object):
                 else:
                     call.callback(call.result)
 
-            call.completed.set()
+            call.ready.set()
             del self.pending_calls[str(call.id)]
 
     def on_rpc_error(self, id, data):
@@ -369,7 +360,7 @@ class Connection(object):
             call = self.pending_calls[id]
             call.result = None
             call.error = data
-            call.completed.set()
+            call.ready.set()
             if call.callback is not None:
                 call.callback(rpc.RpcException(obj=call.error))
 
@@ -505,12 +496,8 @@ class Connection(object):
     def call_sync(self, name, *args, **kwargs):
         timeout = kwargs.pop('timeout', self.default_timeout)
         call = self.PendingCall(uuid.uuid4(), name, args)
-        call.streaming = kwargs.pop('streaming', False)
         self.pending_calls[str(call.id)] = call
         self.call(call)
-
-        if call.streaming:
-            return call.result
 
         if not self.wait_for_call(call, timeout):
             if self.error_callback:
@@ -637,7 +624,7 @@ class Connection(object):
                 "code": errno.ECONNABORTED,
                 "message": message
             }
-            call.completed.set()
+            call.ready.set()
             del self.pending_calls[key]
 
     def unregister_event_handler(self, name, handler):

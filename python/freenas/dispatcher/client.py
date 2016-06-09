@@ -123,7 +123,6 @@ class Connection(object):
             self.error = None
             self.ready = Event()
             self.callback = None
-            self.streaming = False
             self.queue = Queue()
             self.seqno = 0
             self.cv = Condition()
@@ -161,6 +160,7 @@ class Connection(object):
         self.use_bursts = False
         self.event_cv = Event()
         self.event_thread = None
+        self.streaming = False
 
     def __process_event(self, name, args):
         with self.event_distribution_lock:

@@ -267,6 +267,7 @@ class ClientTransportSSH(ClientTransport):
         self.stderr = None
         self.host_key_file = None
         self.look_for_keys = True
+        self.connected = False
 
     def connect(self, url, parent, **kwargs):
         self.url = url
@@ -345,6 +346,7 @@ class ClientTransportSSH(ClientTransport):
                 timeout=self.timeout
             )
 
+            self.connected = True
             debug_log('Connected to {0}', self.hostname)
 
         except paramiko.AuthenticationException as err:
@@ -408,6 +410,7 @@ class ClientTransportSSH(ClientTransport):
     def closed(self):
         debug_log("Transport connection has been closed abnormally.")
         self.terminated = True
+        self.connected = False
         self.ssh.close()
 
         self.parent.drop_pending_calls()
@@ -442,6 +445,7 @@ class ClientTransportSock(ClientTransport):
         self.parent = None
         self.terminated = False
         self.creds_sent = False
+        self.connected = False
         self.close_lock = RLock()
         self.wlock = RLock()
 
@@ -460,6 +464,7 @@ class ClientTransportSock(ClientTransport):
             while True:
                 try:
                     self.sock.connect(self.path)
+                    self.connected = True
                     debug_log('Connected to {0}', self.path)
                     break
                 except (socket.error, OSError) as err:
@@ -505,6 +510,7 @@ class ClientTransportSock(ClientTransport):
 
                 except (OSError, ValueError) as err:
                     debug_log("Send failed: {0}".format(err))
+                    self.connected = False
                     self.sock.shutdown(socket.SHUT_RDWR)
                 else:
                     debug_log("Sent data: {0}", message)
@@ -546,6 +552,7 @@ class ClientTransportSock(ClientTransport):
     def close(self):
         debug_log("Disconnected.")
         self.terminated = True
+        self.connected = False
         self.sock.shutdown(socket.SHUT_RDWR)
 
     def closed(self):

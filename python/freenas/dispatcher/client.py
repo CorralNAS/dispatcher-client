@@ -644,6 +644,13 @@ class Client(Connection):
         self.transport = None
         self.parsed_url = None
 
+    @property
+    def connected(self):
+        if not self.transport:
+            return False
+
+        return self.transport.connected
+
     def wait_forever(self):
         while True:
             time.sleep(60)
@@ -667,11 +674,18 @@ class Client(Connection):
         if self.scheme is "http":
             self.scheme = "ws"
 
+        if self.connected:
+            self.disconnect()
+
         self.transport = ClientTransport(self.parsed_url.scheme)
         self.transport.connect(self.parsed_url, self, **kwargs)
         debug_log('Connection opened, local address {0}', self.transport.address)
 
     def disconnect(self):
         debug_log('Closing connection, local address {0}', self.transport.address)
+        if not self.connected:
+            raise RuntimeError('Not connected')
+
+        debug_log('Closing connection')
         self.drop_pending_calls()
         self.transport.close()

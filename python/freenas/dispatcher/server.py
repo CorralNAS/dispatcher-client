@@ -25,12 +25,10 @@
 #
 #####################################################################
 
-import errno
 from urllib.parse import urlsplit
-from freenas.dispatcher.rpc import RpcContext, RpcException, RpcStreamingResponse
+from freenas.dispatcher.rpc import RpcContext
 from freenas.dispatcher.client import Connection
 from freenas.dispatcher.transport import ServerTransport
-from freenas.utils.spawn_thread import spawn_thread
 
 
 class ServerConnection(Connection):

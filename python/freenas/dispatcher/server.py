@@ -83,4 +83,4 @@ class Server(object):
 
     def broadcast_event(self, event, args):
         for i in self.connections:
-            i.send_event(event, args)
+            i.emit_event(event, args)

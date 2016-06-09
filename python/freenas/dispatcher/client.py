@@ -127,19 +127,6 @@ class Connection(object):
             self.seqno = 0
             self.cv = Condition()
 
-    class SubscribedEvent(object):
-        def __init__(self, name, *filters):
-            self.name = name
-            self.refcount = 0
-            self.filters = filters
-
-        def match(self, name, args):
-            if self.name != name:
-                return False
-
-            if self.filters:
-                return match(args, *self.filters)
-
     def __init__(self):
         self.transport = None
         self.logger = logging.getLogger(self.__class__.__name__)

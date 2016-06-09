@@ -143,7 +143,6 @@ class Connection(object):
         self.event_handlers = {}
         self.event_distribution_lock = RLock()
         self.event_emission_lock = RLock()
-        self.last_event_burst = None
         self.event_cv = Event()
         self.event_thread = None
         self.streaming = False
@@ -574,12 +573,7 @@ class Connection(object):
         return self.call_sync('task.submit', name, list(args))
 
     def emit_event(self, name, params):
-        if not self.use_bursts:
-            self.send_event(name, params)
-        else:
-            self.pending_events.append((name, params))
-            self.event_cv.set()
-            self.event_cv.clear()
+        self.send_event(name, params)
 
     def register_event_handler(self, name, handler):
         if name not in self.event_handlers:

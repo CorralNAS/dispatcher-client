@@ -494,6 +494,9 @@ class Connection(object):
         self.rpc = context or rpc.RpcContext()
         if context and isinstance(context, rpc.RpcContext):
             for name in context.services:
+                if name == 'discovery':
+                    continue
+
                 self.call_sync('plugin.register_service', name)
 
     def on_events_event(self, id, data):

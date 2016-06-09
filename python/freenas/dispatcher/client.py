@@ -157,7 +157,6 @@ class Connection(object):
         self.event_distribution_lock = RLock()
         self.event_emission_lock = RLock()
         self.last_event_burst = None
-        self.use_bursts = False
         self.event_cv = Event()
         self.event_thread = None
         self.streaming = False
@@ -170,15 +169,6 @@ class Connection(object):
 
             if self.event_callback:
                 self.event_callback(name, args)
-
-    def __event_emitter(self):
-        while True:
-            self.event_cv.wait()
-
-            while len(self.pending_events) > 0:
-                time.sleep(0.1)
-                with self.event_emission_lock:
-                    self.send_event_burst()
 
     def trace(self, msg):
         pass
@@ -303,6 +293,7 @@ class Connection(object):
         method(message["id"], message["args"])
 
     def on_rpc_response(self, id, data):
+        self.trace('RPC response: id={0}, data={1}'.format(id, data))
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
             call.result = data
@@ -698,9 +689,6 @@ class Client(Connection):
         self.transport = ClientTransport(self.parsed_url.scheme)
         self.transport.connect(self.parsed_url, self, **kwargs)
         debug_log('Connection opened, local address {0}', self.transport.address)
-
-        if self.use_bursts:
-            self.event_thread = spawn_thread(self.__event_emitter)
 
     def disconnect(self):
         debug_log('Closing connection, local address {0}', self.transport.address)

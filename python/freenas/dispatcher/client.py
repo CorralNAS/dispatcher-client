@@ -342,15 +342,11 @@ class Connection(object):
             call = self.pending_calls[id]
             with call.cv:
                 call.seqno = data
-                call.cv.notify()
-            if call.streaming:
                 call.queue.put(None)
+                call.cv.notify()
 
             if call.callback:
-                if call.streaming:
-                    call.callback(None)
-                else:
-                    call.callback(call.result)
+                call.callback(None)
 
             call.ready.set()
             del self.pending_calls[str(call.id)]
@@ -488,7 +484,6 @@ class Connection(object):
     def call_async(self, name, callback, *args, **kwargs):
         call = self.PendingCall(uuid.uuid4(), name, args)
         call.callback = callback
-        call.streaming = kwargs.pop('streaming', False)
         self.pending_calls[str(call.id)] = call
         self.call(call)
         return call

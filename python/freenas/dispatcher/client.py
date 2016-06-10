@@ -646,6 +646,7 @@ class Client(Connection):
         self.scheme = None
         self.transport = None
         self.parsed_url = None
+        self.disconnecting = False
 
     @property
     def connected(self):
@@ -660,7 +661,7 @@ class Client(Connection):
 
     def on_close(self, reason):
         self.drop_pending_calls()
-        if self.error_callback is not None:
+        if self.error_callback is not None and not self.disconnecting:
             self.error_callback(ClientError.CONNECTION_CLOSED)
 
     def parse_url(self, url):
@@ -690,5 +691,6 @@ class Client(Connection):
             raise RuntimeError('Not connected')
 
         debug_log('Closing connection')
-        self.drop_pending_calls()
+        self.disconnecting = True
         self.transport.close()
+        self.disconnecting = False

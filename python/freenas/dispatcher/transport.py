@@ -553,7 +553,10 @@ class ClientTransportSock(ClientTransport):
         debug_log("Disconnected.")
         self.terminated = True
         self.connected = False
-        self.sock.shutdown(socket.SHUT_RDWR)
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
 
     def closed(self):
         with self.close_lock:

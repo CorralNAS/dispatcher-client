@@ -212,7 +212,7 @@ class Connection(object):
         }
 
         if extra is not None:
-            payload.update(extra)
+            payload['extra'] = extra
 
         self.send('rpc', 'error', id=id, args=payload)
 
@@ -371,7 +371,7 @@ class Connection(object):
                     err.extra
                 ))
 
-                self.send_error(id, err.code, err.message)
+                self.send_error(id, err.code, err.message, err.extra)
             else:
                 if isinstance(result, rpc.RpcStreamingResponse):
                     self.pending_iterators[id] = PendingIterator(result)

@@ -648,6 +648,9 @@ class Client(Connection):
         self.parsed_url = None
         self.disconnecting = False
 
+        # When client acts as a server to dispatcher, it always needs to support streaming
+        self.streaming = True
+
     @property
     def connected(self):
         if not self.transport:

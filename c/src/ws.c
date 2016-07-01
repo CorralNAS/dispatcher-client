@@ -47,7 +47,8 @@
 
 #ifdef __FreeBSD__
 #include <sys/endian.h>
-#define htonll(x)   htonl((uint32_t)x)
+#define htonll(x)       htobe64(x)
+#define ntohll(x)       be64toh(x)
 #endif
 
 static char *xsubstrdup(char *str, int start, int end);

@@ -277,17 +277,16 @@ ws_recv_msg(ws_conn_t *conn, void **frame, size_t *size, uint8_t *type)
 
 	for (;;) {
 		if (xread(conn->ws_fd, &header, sizeof(uint16_t)) < 0)
-			return -1;
+			return (-1);
 
 		if (WS_PAYLOAD_GET_LEN(header) == 127) {
 			xread(conn->ws_fd, &len64, sizeof(uint64_t));
-			length = (size_t)ntohl(len64);
+			length = (size_t)ntohll(len64);
 		} else if (WS_PAYLOAD_GET_LEN(header) == 126) {
 			xread(conn->ws_fd, &len16, sizeof(uint16_t));
 			length = (size_t)ntohs(len16);
 		} else
 			length = (size_t) WS_PAYLOAD_GET_LEN(header);
-
 
 		*frame = realloc(*frame, length);
 		total += length;
@@ -334,7 +333,7 @@ ws_event_loop(void *arg)
 		for (i = 0; i < evs; i++) {
 			if (event.ident == conn->ws_fd) {
 				if (event.flags & EV_EOF)
-					return NULL;
+					return (NULL);
 
 				frame = NULL;
 

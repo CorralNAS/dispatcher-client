@@ -544,6 +544,9 @@ dispatcher_process_rpc(connection_t *conn, json_t *msg)
 
 	TAILQ_FOREACH_SAFE(call, &conn->conn_calls, rc_link, tmp) {
 		if (!strcmp(id, json_string_value(call->rc_id))) {
+                        if (call->rc_result != NULL)
+                                json_decref(call->rc_result);
+                        
 			if (error) {
                                 call->rc_status = RPC_CALL_ERROR;
                                 call->rc_result = result;
@@ -551,8 +554,10 @@ dispatcher_process_rpc(connection_t *conn, json_t *msg)
 
                         if (fragment) {
                                 call->rc_status = RPC_CALL_MORE_AVAILABLE;
-                                call->rc_seqno = json_integer_value(json_object_get(result, "seqno"));
-                                call->rc_result = json_object_get(result, "fragment");
+                                call->rc_seqno = (int)json_integer_value(
+                                    json_object_get(result, "seqno"));
+                                call->rc_result = json_object_get(result,
+                                    "fragment");
                         }
 
                         if (end || response) {

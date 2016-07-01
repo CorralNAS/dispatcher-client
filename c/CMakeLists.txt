@@ -25,5 +25,8 @@ target_link_libraries(enum dispatcherclient)
 add_executable(listen examples/listen.c)
 target_link_libraries(listen dispatcherclient)
 
+add_executable(stream examples/stream.c)
+target_link_libraries(stream dispatcherclient)
+
 install(TARGETS dispatcherclient LIBRARY DESTINATION lib)
 install(FILES src/dispatcher.h DESTINATION include)

@@ -317,6 +317,11 @@ class Connection(object):
         self.trace('RPC end: id={0}'.format(id))
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
+
+            # Create iterator in case it was empty response
+            if not call.result:
+                call.result = StreamingResultIterator(self, call)
+
             with call.cv:
                 call.seqno = data
                 call.queue.put(None)

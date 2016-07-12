@@ -42,6 +42,9 @@ class JsonEncoder(json.JSONEncoder):
 
         if type(obj) is bytes:
             return {'$binary': base64.b64encode(obj).decode('ascii')}
+            
+        if type(obj) is set:
+            return list(obj)
 
         if hasattr(obj, '__getstate__'):
             return obj.__getstate__()

@@ -73,19 +73,22 @@ def debug_log(message, *args):
 class PendingIterator(object):
     def __init__(self, iter):
         self.iter = iter
+        self.lock = RLock()
         self.seqno = 0
 
     def advance(self):
-        try:
-            val = next(self.iter)
-        except StopIteration:
-            raise StopIteration(self.seqno + 1)
+        with self.lock:
+            try:
+                val = next(self.iter)
+            except StopIteration:
+                raise StopIteration(self.seqno + 1)
 
-        self.seqno += 1
-        return val, self.seqno
+            self.seqno += 1
+            return val, self.seqno
 
     def close(self):
-        self.iter.close()
+        with self.lock:
+            self.iter.close()
 
 
 class StreamingResultIterator(object):

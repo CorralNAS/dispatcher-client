@@ -686,8 +686,6 @@ class Client(Connection):
         else:
             if 'scheme' in kwargs:
                 raise ValueError('Connection scheme cannot be delared in both url and arguments.')
-        if self.scheme is "http":
-            self.scheme = "ws"
 
         if self.connected:
             self.disconnect()

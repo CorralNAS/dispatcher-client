@@ -512,7 +512,7 @@ class ClientTransportUnix(ClientTransport):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.parent = parent
         if not self.parent:
-            raise RuntimeError('ClientTransportSock can be only created inside of a class')
+            raise RuntimeError('ClientTransportUnix can be only created inside of a class')
 
         timeout = kwargs.get('timeout', 30)
 
@@ -626,7 +626,7 @@ class ClientTransportUnix(ClientTransport):
 
 
 @server_transport('unix')
-class ServerTransportSock(ServerTransport):
+class ServerTransportUnix(ServerTransport):
     class UnixSocketHandler(object):
         def __init__(self, server, connfd, address):
             self.connfd = connfd

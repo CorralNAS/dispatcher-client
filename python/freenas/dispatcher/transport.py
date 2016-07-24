@@ -437,8 +437,67 @@ class ClientTransportSSH(ClientTransport):
         return self.ssh.get_host_keys()
 
 
+@client_transport('fd')
+class ClientTransportFD(ClientTransport):
+    def __init__(self, scheme):
+        self.wlock = RLock()
+        self.parent = None
+        self.fd = -1
+        self.fobj = None
+        self.connected = True
+
+    @property
+    def address(self):
+        return str(self.fd)
+
+    def connect(self, url, parent, **kwargs):
+        self.parent = parent
+        self.fd = int(url.hostname)
+        self.fobj = os.fdopen(self.fd, 'w+b', 0)
+        spawn_thread(self.recv)
+
+    def send(self, message, fds):
+        with self.wlock:
+            try:
+                header = struct.pack('II', 0xdeadbeef, len(message))
+                message = message.encode('utf-8')
+                self.fobj.write(header + message)
+            except (OSError, ValueError) as err:
+                debug_log("Send failed: {0}".format(err))
+                self.connected = False
+            else:
+                debug_log("Sent data: {0}", message)
+
+    def recv(self):
+        while True:
+            try:
+                header = self.fobj.read(8)
+                if header == b'' or len(header) != 8:
+                    break
+
+                magic, length = struct.unpack('II', header)
+                if magic != 0xdeadbeef:
+                    debug_log('Message with wrong magic dropped (magic {0:x})'.format(magic))
+                    continue
+
+                message = self.fobj.read(length)
+                if message == b'' or len(message) != length:
+                    break
+
+                debug_log("Received data: {0}", message)
+                self.parent.on_message(message)
+            except OSError:
+                break
+
+        try:
+            os.close(self.fd)
+            self.connected = False
+        except OSError:
+            pass
+
+
 @client_transport('unix')
-class ClientTransportSock(ClientTransport):
+class ClientTransportUnix(ClientTransport):
     def __init__(self, scheme):
         self.path = '/var/run/dispatcher.sock'
         self.sock = None

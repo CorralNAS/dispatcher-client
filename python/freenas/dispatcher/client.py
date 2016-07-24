@@ -149,6 +149,7 @@ class Connection(object):
         self.event_cv = Event()
         self.event_thread = None
         self.streaming = False
+        self.standalone_server = False
 
     def __process_event(self, name, args):
         with self.event_distribution_lock:
@@ -505,7 +506,8 @@ class Connection(object):
                 if name == 'discovery':
                     continue
 
-                self.call_sync('plugin.register_service', name)
+                if not self.standalone_server:
+                    self.call_sync('plugin.register_service', name)
 
     def on_events_event(self, id, data):
         spawn_thread(self.__process_event, data['name'], data['args'], threadpool=True)
@@ -537,20 +539,23 @@ class Connection(object):
             raise RuntimeError('Call enable_server() first')
 
         self.rpc.register_service_instance(name, impl)
-        self.call_sync('plugin.register_service', name)
+        if not self.standalone_server:
+            self.call_sync('plugin.register_service', name)
 
     def unregister_service(self, name):
         if self.rpc is None:
             raise RuntimeError('Call enable_server() first')
 
         self.rpc.unregister_service(name)
-        self.call_sync('plugin.unregister_service', name)
+        if not self.standalone_server:
+            self.call_sync('plugin.unregister_service', name)
 
     def resume_service(self, name):
         if self.rpc is None:
             raise RuntimeError('Call enable_server() first')
 
-        self.call_sync('plugin.resume_service', name)
+        if not self.standalone_server:
+            self.call_sync('plugin.resume_service', name)
 
     def register_schema(self, name, schema):
         if self.rpc is None:

@@ -29,7 +29,7 @@
 class FileDescriptor(object):
     def __init__(self, fd=None, close=True):
         self.fd = fd
-        self.close = True
+        self.close = close
 
     def __str__(self):
         return "<FileDescriptor fd={0}>".format(self.fd)
@@ -38,41 +38,53 @@ class FileDescriptor(object):
         return str(self)
 
 
-def collect_fds(obj, start=0):
-    idx = start
+class ChannelSerializer(object):
+    @staticmethod
+    def collect_fds(obj, start=0):
+        raise NotImplementedError()
 
-    if isinstance(obj, dict):
-        for k, v in list(obj.items()):
-            if isinstance(v, FileDescriptor):
-                obj[k] = {'$fd': idx}
-                idx += 1
-                yield v
-            else:
-                for x in collect_fds(v, idx):
-                    yield x
-
-    if isinstance(obj, (list, tuple)):
-        for i, o in enumerate(obj):
-            if isinstance(o, FileDescriptor):
-                obj[i] = {'$fd': idx}
-                idx += 1
-                yield o
-            else:
-                for x in collect_fds(o, idx):
-                    yield x
+    @staticmethod
+    def replace_fds(obj, fds):
+        raise NotImplementedError
 
 
-def replace_fds(obj, fds):
-    if isinstance(obj, dict):
-        for k, v in list(obj.items()):
-            if isinstance(v, dict) and len(v) == 1 and '$fd' in v:
-                obj[k] = FileDescriptor(fds[v['$fd']]) if v['$fd'] < len(fds) else None
-            else:
-                replace_fds(v, fds)
+class UnixChannelSerializer(ChannelSerializer):
+    @staticmethod
+    def collect_fds(obj, start=0):
+        idx = start
 
-    if isinstance(obj, list):
-        for i, o in enumerate(obj):
-            if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
-                obj[i] = FileDescriptor(fds[o['$fd']]) if o['$fd'] < len(fds) else None
-            else:
-                replace_fds(o, fds)
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                if isinstance(v, FileDescriptor):
+                    obj[k] = {'$fd': idx}
+                    idx += 1
+                    yield v
+                else:
+                    for x in UnixChannelSerializer.collect_fds(v, idx):
+                        yield x
+
+        if isinstance(obj, (list, tuple)):
+            for i, o in enumerate(obj):
+                if isinstance(o, FileDescriptor):
+                    obj[i] = {'$fd': idx}
+                    idx += 1
+                    yield o
+                else:
+                    for x in UnixChannelSerializer.collect_fds(o, idx):
+                        yield x
+
+    @staticmethod
+    def replace_fds(obj, fds):
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                if isinstance(v, dict) and len(v) == 1 and '$fd' in v:
+                    obj[k] = FileDescriptor(fds[v['$fd']]) if v['$fd'] < len(fds) else None
+                else:
+                    UnixChannelSerializer.replace_fds(v, fds)
+
+        if isinstance(obj, list):
+            for i, o in enumerate(obj):
+                if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
+                    obj[i] = FileDescriptor(fds[o['$fd']]) if o['$fd'] < len(fds) else None
+                else:
+                    UnixChannelSerializer.replace_fds(o, fds)

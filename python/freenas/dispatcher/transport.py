@@ -464,7 +464,7 @@ class ClientTransportFD(ClientTransport):
                 self.fobj.write(header + message)
             except (OSError, ValueError) as err:
                 debug_log("Send failed: {0}".format(err))
-                self.connected = False
+                self.doclose()
             else:
                 debug_log("Sent data: {0}", message)
 
@@ -489,11 +489,18 @@ class ClientTransportFD(ClientTransport):
             except OSError:
                 break
 
+        self.doclose()
+
+    def doclose(self):
         try:
             os.close(self.fd)
-            self.connected = False
         except OSError:
             pass
+        finally:
+            self.connected = False
+
+    def close(self):
+        self.doclose()
 
 
 @client_transport('unix')

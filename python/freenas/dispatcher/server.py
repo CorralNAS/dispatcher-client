@@ -73,6 +73,9 @@ class Server(object):
     def serve_forever(self):
         self.transport.serve_forever(self)
 
+    def close(self):
+        self.transport.close()
+
     def on_connection(self, handler):
         conn = self.connection_class(self)
         conn.transport = handler

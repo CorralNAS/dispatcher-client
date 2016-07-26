@@ -762,9 +762,17 @@ class ServerTransportUnix(ServerTransport):
             try:
                 fd, addr = self.sockfd.accept()
             except OSError as err:
+                if err.errno == errno.ECONNABORTED:
+                    break
+
                 self.logger.error('accept() failed: {0}'.format(str(err)))
                 continue
 
             handler = self.UnixSocketHandler(self, fd, addr)
             handler.conn = server.on_connection(handler)
             spawn_thread(handler.handle_connection, threadpool=True)
+
+        self.sockfd.close()
+
+    def close(self):
+        self.sockfd.shutdown(socket.SHUT_RDWR)

@@ -218,6 +218,9 @@ class RpcService(object):
     def _build_result_schema(self, method):
         return method.result_schema
 
+    def initialize(self, context):
+        pass
+
     def get_metadata(self):
         result = {'private': False}
 

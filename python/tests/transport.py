@@ -30,6 +30,7 @@ import time
 import socket
 import unittest
 import threading
+import logging
 from freenas.dispatcher.rpc import RpcService, RpcContext
 from freenas.dispatcher.client import Client
 from freenas.dispatcher.server import Server
@@ -57,24 +58,39 @@ class TestClientServer(unittest.TestCase):
 
         # Spin until server is ready
         while not os.path.exists(sockpath):
-            time.sleep(0.5)
+            time.sleep(0.1)
 
         client = Client()
         client.connect(sockurl)
+        self.assertTrue(client.connected)
         self.assertEqual(client.call_sync('test.hello', 'freenas'), 'Hello World, freenas')
+
+        client.disconnect()
+        server.close()
 
     def test_back_to_back(self):
         a, b = socket.socketpair()
+        self.assertGreaterEqual(a.fileno(), 0)
+        self.assertGreaterEqual(b.fileno(), 0)
+
         c1 = Client()
         c1.standalone_server = True
         c1.enable_server()
         c1.register_service('test', TestService())
         c1.connect('fd://{0}'.format(a.fileno()))
+        self.assertTrue(c1.connected)
+
         c2 = Client()
         c2.connect('fd://{0}'.format(b.fileno()))
+        self.assertTrue(c2.connected)
         self.assertEqual(c2.call_sync('test.hello', 'freenas'), 'Hello World, freenas')
         c2.disconnect()
 
+        c1.disconnect()
+        a.close()
+        b.close()
+
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     unittest.main()

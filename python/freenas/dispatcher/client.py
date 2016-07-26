@@ -703,7 +703,7 @@ class Client(Connection):
     def disconnect(self):
         debug_log('Closing connection, local address {0}', self.transport.address)
         if not self.connected:
-            raise RuntimeError('Not connected')
+            return
 
         debug_log('Closing connection')
         self.disconnecting = True

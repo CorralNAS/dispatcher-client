@@ -110,7 +110,7 @@ class StreamingResultIterator(object):
             self.client.call_continue(self.call.id, True)
 
         v = self.q.get()
-        if not v:
+        if v is None:
             raise StopIteration
 
         return v

@@ -766,7 +766,7 @@ class ServerTransportUnix(ServerTransport):
                     break
 
                 self.logger.error('accept() failed: {0}'.format(str(err)))
-                continue
+                break
 
             handler = self.UnixSocketHandler(self, fd, addr)
             handler.conn = server.on_connection(handler)

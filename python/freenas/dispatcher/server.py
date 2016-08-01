@@ -38,6 +38,9 @@ class ServerConnection(Connection):
         self.streaming = False
 
     def on_open(self):
+        if self.parent.channel_serializer:
+            self.channel_serializer = self.parent.channel_serializer
+
         self.parent.connections.append(self)
 
     def on_close(self, reason):
@@ -55,6 +58,7 @@ class Server(object):
         self.scheme = None
         self.transport = None
         self.rpc = None
+        self.channel_serializer = None
         self.context = context or RpcContext()
         self.connections = []
 

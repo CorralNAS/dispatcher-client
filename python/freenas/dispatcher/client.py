@@ -150,7 +150,7 @@ class Connection(object):
         self.event_thread = None
         self.streaming = False
         self.standalone_server = False
-        self.channel_serializer = UnixChannelSerializer
+        self.channel_serializer = UnixChannelSerializer()
 
     def __process_event(self, name, args):
         with self.event_distribution_lock:

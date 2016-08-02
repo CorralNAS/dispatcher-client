@@ -25,6 +25,8 @@
 #
 #####################################################################
 
+from freenas.utils import first_or_default
+
 
 class FileDescriptor(object):
     def __init__(self, fd=None, close=True):
@@ -86,5 +88,55 @@ class UnixChannelSerializer(ChannelSerializer):
             for i, o in enumerate(obj):
                 if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
                     obj[i] = FileDescriptor(fds[o['$fd']]) if o['$fd'] < len(fds) else None
+                else:
+                    UnixChannelSerializer.replace_fds(o, fds)
+
+
+class MSockChannelSerializer(ChannelSerializer):
+    def __init__(self, msock):
+        self.msock = msock
+
+    def __fd_to_channel(self, fd):
+        chan = first_or_default(lambda c: c.fileno() == fd, self.msock.channels.values())
+        return chan.id if chan else -1
+
+    def __channel_to_fd(self, id):
+        chan = first_or_default(lambda c: c.id == id, self.msock.channels.values())
+        if not chan:
+            chan = self.msock.create_channel(id)
+
+        return chan.fileno()
+
+    def collect_fds(self, obj, start=0):
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                if isinstance(v, FileDescriptor):
+                    obj[k] = {'$fd': self.__fd_to_channel(v.fd)}
+                    yield v
+                else:
+                    for x in UnixChannelSerializer.collect_fds(v):
+                        yield x
+
+        if isinstance(obj, (list, tuple)):
+            for i, o in enumerate(obj):
+                if isinstance(o, FileDescriptor):
+                    obj[i] = {'$fd': self.__fd_to_channel(o.fd)}
+                    yield o
+                else:
+                    for x in UnixChannelSerializer.collect_fds(o):
+                        yield x
+
+    def replace_fds(self, obj, fds):
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                if isinstance(v, dict) and len(v) == 1 and '$fd' in v:
+                    obj[k] = FileDescriptor(self.__channel_to_fd(v['$fd']))
+                else:
+                    UnixChannelSerializer.replace_fds(v, fds)
+
+        if isinstance(obj, list):
+            for i, o in enumerate(obj):
+                if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
+                    obj[i] = FileDescriptor(self.__channel_to_fd(o['$fd']))
                 else:
                     UnixChannelSerializer.replace_fds(o, fds)

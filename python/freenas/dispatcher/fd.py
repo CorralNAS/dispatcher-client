@@ -41,18 +41,15 @@ class FileDescriptor(object):
 
 
 class ChannelSerializer(object):
-    @staticmethod
-    def collect_fds(obj, start=0):
+    def collect_fds(self, obj, start=0):
         raise NotImplementedError()
 
-    @staticmethod
-    def replace_fds(obj, fds):
+    def replace_fds(self, obj, fds):
         raise NotImplementedError
 
 
 class UnixChannelSerializer(ChannelSerializer):
-    @staticmethod
-    def collect_fds(obj, start=0):
+    def collect_fds(self, obj, start=0):
         idx = start
 
         if isinstance(obj, dict):
@@ -62,7 +59,7 @@ class UnixChannelSerializer(ChannelSerializer):
                     idx += 1
                     yield v
                 else:
-                    for x in UnixChannelSerializer.collect_fds(v, idx):
+                    for x in self.collect_fds(v, idx):
                         yield x
 
         if isinstance(obj, (list, tuple)):
@@ -72,24 +69,23 @@ class UnixChannelSerializer(ChannelSerializer):
                     idx += 1
                     yield o
                 else:
-                    for x in UnixChannelSerializer.collect_fds(o, idx):
+                    for x in self.collect_fds(o, idx):
                         yield x
 
-    @staticmethod
-    def replace_fds(obj, fds):
+    def replace_fds(self, obj, fds):
         if isinstance(obj, dict):
             for k, v in list(obj.items()):
                 if isinstance(v, dict) and len(v) == 1 and '$fd' in v:
                     obj[k] = FileDescriptor(fds[v['$fd']]) if v['$fd'] < len(fds) else None
                 else:
-                    UnixChannelSerializer.replace_fds(v, fds)
+                    self.replace_fds(v, fds)
 
         if isinstance(obj, list):
             for i, o in enumerate(obj):
                 if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
                     obj[i] = FileDescriptor(fds[o['$fd']]) if o['$fd'] < len(fds) else None
                 else:
-                    UnixChannelSerializer.replace_fds(o, fds)
+                    self.replace_fds(o, fds)
 
 
 class MSockChannelSerializer(ChannelSerializer):
@@ -114,7 +110,7 @@ class MSockChannelSerializer(ChannelSerializer):
                     obj[k] = {'$fd': self.__fd_to_channel(v.fd)}
                     yield v
                 else:
-                    for x in UnixChannelSerializer.collect_fds(v):
+                    for x in self.collect_fds(v):
                         yield x
 
         if isinstance(obj, (list, tuple)):
@@ -123,7 +119,7 @@ class MSockChannelSerializer(ChannelSerializer):
                     obj[i] = {'$fd': self.__fd_to_channel(o.fd)}
                     yield o
                 else:
-                    for x in UnixChannelSerializer.collect_fds(o):
+                    for x in self.collect_fds(o):
                         yield x
 
     def replace_fds(self, obj, fds):
@@ -132,11 +128,11 @@ class MSockChannelSerializer(ChannelSerializer):
                 if isinstance(v, dict) and len(v) == 1 and '$fd' in v:
                     obj[k] = FileDescriptor(self.__channel_to_fd(v['$fd']))
                 else:
-                    UnixChannelSerializer.replace_fds(v, fds)
+                    self.replace_fds(v, fds)
 
         if isinstance(obj, list):
             for i, o in enumerate(obj):
                 if isinstance(o, dict) and len(o) == 1 and '$fd' in o:
                     obj[i] = FileDescriptor(self.__channel_to_fd(o['$fd']))
                 else:
-                    UnixChannelSerializer.replace_fds(o, fds)
+                    self.replace_fds(o, fds)

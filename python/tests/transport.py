@@ -67,6 +67,7 @@ class TestClientServer(unittest.TestCase):
 
         client.disconnect()
         server.close()
+        os.unlink(sockpath)
 
     def test_back_to_back(self):
         a, b = socket.socketpair()
@@ -84,10 +85,10 @@ class TestClientServer(unittest.TestCase):
         c2.connect('fd://{0}'.format(b.fileno()))
         self.assertTrue(c2.connected)
         self.assertEqual(c2.call_sync('test.hello', 'freenas'), 'Hello World, freenas')
-        c2.disconnect()
 
-        c1.disconnect()
+        c2.disconnect()
         a.close()
+        c1.disconnect()
         b.close()
 
 

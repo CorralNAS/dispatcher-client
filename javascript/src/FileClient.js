@@ -74,67 +74,110 @@ export class FileClient
         reader.readAsBinaryString(msg.data);
     }
 
-    upload(destPath, size, mode) {
-        /* Request upload file connection websocket */
-        this.client.call(
-            "filesystem.upload",
-            [destPath, size, mode],
-            result => {
-                this.token = result;
-                this.socket = new WebSocket(`ws://${this.client.hostname}:5000/file`);
-                if (this.socket instanceof WebSocket) {
-                    Object.assign(
-                        this.socket,
-                        {
-                            onopen: this.__onopen.bind(this),
-                            onmessage: this.__onmessage.bind(this),
-                            onerror: this.__onerror.bind(this),
-                            onclose: this.__onclose.bind(this)
-                        }
-                    );
+    upload(destPath, size, mode, url) {
+        if (typeof url != 'undefined') {
+            this.socket = new WebSocket(url);
+            if (this.socket instanceof WebSocket) {
+                Object.assign(
+                    this.socket,
+                    {
+                        onopen: this.__onopen.bind(this),
+                        onmessage: this.__onmessage.bind(this),
+                        onerror: this.__onerror.bind(this),
+                        onclose: this.__onclose.bind(this)
+                    }
+                );
                 } else {
                     throw new Error("Was unable to create a WebSocket instance for FileConnection");
                 }
-            }
-        );
-    }
-
-    download(path, filename, downloadType) {
-        if (downloadType === "stream") {
-            /* Request download file connection websocket */
+        } else {
+            /* Request upload file connection websocket */
             this.client.call(
-                "filesystem.download",
-                [path],
+                "filesystem.upload",
+                [destPath, size, mode],
                 result => {
                     this.token = result;
                     this.socket = new WebSocket(`ws://${this.client.hostname}:5000/file`);
                     if (this.socket instanceof WebSocket) {
-                      Object.assign(
-                        this.socket,
-                        {
-                            onopen: this.__onopen.bind(this),
-                            onmessage: this.__onmessage.bind(this),
-                            onerror: this.__onerror.bind(this),
-                            onclose: this.__onclose.bind(this)
-                        }
-                      );
+                        Object.assign(
+                            this.socket,
+                            {
+                                onopen: this.__onopen.bind(this),
+                                onmessage: this.__onmessage.bind(this),
+                                onerror: this.__onerror.bind(this),
+                                onclose: this.__onclose.bind(this)
+                            }
+                        );
                     } else {
-                      throw new Error("Was unable to create a WebSocket instance for FileConnection");
+                        throw new Error("Was unable to create a WebSocket instance for FileConnection");
                     }
-              }
-            );
-        } else {
-            this.client.call(
-                "filesystem.download",
-                [path],
-                result => {
-                    this.token = result;
-                    var downloadLink = document.createElement("a");
-                    downloadLink.href = `http://${this.client.hostname}:5000/filedownload?token=${this.token}`;
-                    downloadLink.download = filename;
-                    downloadLink.click();
                 }
             );
+        }
+    }
+
+    download(path, filename, downloadType, url) {
+        if (downloadType === "stream") {
+            if (typeof url != 'undefined') {
+                this.socket = new WebSocket(url);
+                if (this.socket instanceof WebSocket) {
+                  Object.assign(
+                    this.socket,
+                    {
+                        onopen: this.__onopen.bind(this),
+                        onmessage: this.__onmessage.bind(this),
+                        onerror: this.__onerror.bind(this),
+                        onclose: this.__onclose.bind(this)
+                    }
+                  );
+                } else {
+                  throw new Error("Was unable to create a WebSocket instance for FileConnection");
+                }
+            } else {
+                /* Request download file connection websocket */
+                this.client.call(
+                    "filesystem.download",
+                    [path],
+                    result => {
+                        this.token = result;
+                        this.socket = new WebSocket(
+                            typeof url != 'undefined' ? url : `ws://${this.client.hostname}:5000/file`;
+                        );
+                        if (this.socket instanceof WebSocket) {
+                          Object.assign(
+                            this.socket,
+                            {
+                                onopen: this.__onopen.bind(this),
+                                onmessage: this.__onmessage.bind(this),
+                                onerror: this.__onerror.bind(this),
+                                onclose: this.__onclose.bind(this)
+                            }
+                          );
+                        } else {
+                          throw new Error("Was unable to create a WebSocket instance for FileConnection");
+                        }
+                  }
+                );
+            }
+        } else {
+            if (typeof url != 'undefined') {
+                var downloadLink = document.createElement("a");
+                downloadLink.href = url;
+                downloadLink.download = filename;
+                downloadLink.click();
+            } else {
+                this.client.call(
+                    "filesystem.download",
+                    [path],
+                    result => {
+                        this.token = result;
+                        var downloadLink = document.createElement("a");
+                        downloadLink.href = `http://${this.client.hostname}:5000/filedownload?token=${this.token}`;
+                        downloadLink.download = filename;
+                        downloadLink.click();
+                    }
+                );
+            }
         }
     }
 

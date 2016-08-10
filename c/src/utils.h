@@ -33,6 +33,8 @@
 void *xmalloc(size_t);
 ssize_t xread(int, void *, size_t);
 ssize_t xwrite(int, void *, size_t);
+ssize_t xrecvmsg(int, struct msghdr *, int);
+ssize_t xsendmsg(int, struct msghdr *, int);
 char *xfgetln(FILE *);
 
 #endif  /* __UTILS_H */

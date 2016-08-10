@@ -27,6 +27,7 @@
 
 #define _WITH_GETLINE
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -78,6 +79,38 @@ xwrite(int fd, void *buf, size_t nbytes)
 		}
 
 		done += ret;
+	}
+
+	return (done);
+}
+
+ssize_t
+xrecvmsg(int fd, struct msghdr *msg, int flags)
+{
+
+	return (recvmsg(fd, msg, flags | MSG_WAITALL));
+}
+
+ssize_t
+xsendmsg(int fd, struct msghdr *msg, int flags)
+{
+	ssize_t ret, done = 0;
+	ssize_t nbytes = (ssize_t)msg->msg_iov[0].iov_len;
+
+	while (done < nbytes) {
+		ret = sendmsg(fd, msg, flags);
+		if (ret < 0) {
+			if (errno == EINTR || errno == EAGAIN)
+				continue;
+
+			return (-1);
+		}
+
+		done += ret;
+		msg->msg_iov[0].iov_base += ret;
+		msg->msg_iov[0].iov_len -= ret;
+		msg->msg_control = NULL;
+		msg->msg_controllen = 0;
 	}
 
 	return (done);

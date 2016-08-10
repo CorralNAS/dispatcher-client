@@ -136,6 +136,7 @@ class Connection(object):
         self.rlock = RLock()
         self.rpc = None
         self.token = None
+        self.credentials = None
         self.pending_iterators = {}
         self.pending_calls = {}
         self.default_timeout = 20

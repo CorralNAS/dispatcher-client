@@ -34,6 +34,7 @@ import traceback
 import hashlib
 import json
 import itertools
+import threading
 from datetime import datetime
 from freenas.dispatcher import validator
 from freenas.dispatcher.fd import FileDescriptor
@@ -149,6 +150,9 @@ class RpcContext(object):
                 args['sender'] = sender
             elif type(args) is list:
                 args.append(sender)
+
+        tls = threading.local()
+        tls.sender = sender
 
         try:
             if type(args) is dict:

@@ -131,9 +131,9 @@ export class DispatcherClient
 
                 /* Handle the promise */
                 if (result instanceof RPCException)
-                    call.reject(result);
+                    call.reject !== undefined && call.reject(result);
                 else
-                    call.resolve(result);
+                    call.resolve !== undefined && call.resolve(result);
 
                 call.callback(result);
                 this.pendingCalls.delete(data.id);

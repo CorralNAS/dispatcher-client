@@ -590,7 +590,11 @@ class ClientTransportUnix(ClientTransport):
         while self.terminated is False:
             try:
                 fds = array.array('i')
-                header, ancdata = xrecvmsg(self.sock, 8, socket.CMSG_LEN(MAXFDS * fds.itemsize))
+                header, ancdata = xrecvmsg(
+                    self.sock, 8,
+                    socket.CMSG_SPACE(MAXFDS * fds.itemsize) + socket.CMSG_SPACE(CMSGCRED_SIZE)
+                )
+
                 if header == b'' or len(header) != 8:
                     break
 
@@ -605,6 +609,15 @@ class ClientTransportUnix(ClientTransport):
 
                 debug_log("Received data: {0}", message)
                 for cmsg_level, cmsg_type, cmsg_data in ancdata:
+                    if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_CREDS:
+                        pid, uid, euid, gid = struct.unpack('iiii', cmsg_data[:struct.calcsize('iiii')])
+                        self.parent.credentials = {
+                            'pid': pid,
+                            'uid': uid,
+                            'euid': euid,
+                            'gid': gid
+                        }
+
                     if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS:
                         fds.fromstring(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
 
@@ -646,6 +659,7 @@ class ServerTransportUnix(ServerTransport):
             self.server = server
             self.client_address = ("unix", 0)
             self.conn = None
+            self.creds_sent = False
             self.wlock = RLock()
 
         def send(self, message, fds=None):
@@ -661,6 +675,9 @@ class ServerTransportUnix(ServerTransport):
                     if fd == -1:
                         return
 
+                    if not self.creds_sent:
+                        ancdata.append((socket.SOL_SOCKET, socket.SCM_CREDS, bytearray(CMSGCRED_SIZE)))
+
                     if fds:
                         ancdata.append((socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds])))
 
@@ -669,6 +686,8 @@ class ServerTransportUnix(ServerTransport):
                         raise OSError(errno.ETIMEDOUT, 'Operation timed out')
 
                     xsendmsg(self.connfd, header + data, ancdata)
+                    self.creds_sent = True
+
                     for i in fds:
                         if i.close:
                             try:

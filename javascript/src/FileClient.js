@@ -52,26 +52,26 @@ export class FileClient
     }
 
     __onerror(ev) {
-      alert(getErrno(ev.code));
-      this.onError();
+        alert(getErrno(ev.code));
+        this.onError();
     }
 
-    __onmessage( msg ) {
-      if (!this.authenticated) {
-        let payload = JSON.parse(msg.data);
-        if (payload.status == "ok") {
-            this.authenticated = true;
-        } else {
-            /* XXX error */
-            console.log("FileConnection not authenticated? payload: ", payload);
+    __onmessage(msg) {
+        if (!this.authenticated) {
+            let payload = JSON.parse(msg.data);
+            if (payload.status == "ok") {
+                this.authenticated = true;
+            } else {
+                /* XXX error */
+                console.log("FileConnection not authenticated? payload: ", payload);
+            }
+
+            return;
         }
 
-        return;
-      }
-
-      var reader = new FileReader();
-      reader.onload = () => {this.onData(reader.result);};
-      reader.readAsBinaryString(msg.data);
+        var reader = new FileReader();
+        reader.onload = () => {this.onData(reader.result);};
+        reader.readAsBinaryString(msg.data);
     }
 
     upload(destPath, size, mode) {

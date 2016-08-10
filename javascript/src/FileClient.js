@@ -45,13 +45,10 @@ export class FileClient
         this.socket.send(JSON.stringify({token: this.token}));
         this.onOpen();
     }
-
-
+    
     __onclose(closeEv) {
         console.log("FileConnection onclose event: ", closeEv);
         this.onClose();
-    }
-
     }
 
     __onerror(ev) {

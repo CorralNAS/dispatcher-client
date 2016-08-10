@@ -89,16 +89,15 @@ unix_send_msg(unix_conn_t *conn, void *buf, size_t size)
 {
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
-	struct iovec iov = { .iov_base = buf, .iov_len = size };
+	struct iovec iov;
 	uint32_t header[2];
 
 	header[0] = 0xdeadbeef;
 	header[1] = (uint32_t)size;
 
-	if (xwrite(conn->unix_fd, &header, sizeof(uint32_t) * 2) < 0)
-		return (-1);
-
 	memset(&msg, 0, sizeof(struct msghdr));
+	iov.iov_base = header;
+	iov.iov_len = sizeof(header);
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 	msg.msg_controllen = CMSG_SPACE(sizeof(struct cmsgcred));
@@ -112,14 +111,15 @@ unix_send_msg(unix_conn_t *conn, void *buf, size_t size)
 	if (xsendmsg(conn->unix_fd, &msg, 0) < 0)
 		return (-1);
 
+	if (xwrite(conn->unix_fd, buf, size) < 0)
+		return (-1);
+
 	return (0);
 }
 
 int
 unix_recv_msg(unix_conn_t *conn, void **frame, size_t *size)
 {
-	struct msghdr msg;
-	struct iovec iov;
 	uint32_t header[2];
 	size_t length;
 
@@ -133,13 +133,7 @@ unix_recv_msg(unix_conn_t *conn, void **frame, size_t *size)
 	*frame = malloc(length);
 	*size = length;
 
-	iov.iov_len = length;
-	iov.iov_base = *frame;
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
-	msg.msg_controllen = 0;
-
-	if (xrecvmsg(conn->unix_fd, &msg, 0) < 0)
+	if (xread(conn->unix_fd, *frame, length) < 0)
 		return (-1);
 
 	return (0);

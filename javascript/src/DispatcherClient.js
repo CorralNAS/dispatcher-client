@@ -128,6 +128,13 @@ export class DispatcherClient
 
                 let call = this.pendingCalls.get(data.id);
                 clearTimeout(call.timeout);
+
+                /* Handle the promise */
+                if (result instanceof RPCException)
+                    call.reject(result);
+                else
+                    call.resolve(result);
+
                 call.callback(result);
                 this.pendingCalls.delete(data.id);
             }
@@ -258,23 +265,27 @@ export class DispatcherClient
         this.socket.send(DispatcherClient.__pack("rpc", "auth_token", payload, id));
     }
 
-    call(method, args, callback)
+    call(method, args, callback=null)
     {
-        let id = DispatcherClient.__uuid();
-        let timeout = setTimeout(() => { this.__ontimeout(id); }, this.defaultTimeout * 1000);
-        let payload = {
-            "method": method,
-            "args": args
-        };
+        return new Promise((resolve, reject) => {
+            let id = DispatcherClient.__uuid();
+            let timeout = setTimeout(() => { this.__ontimeout(id); }, this.defaultTimeout * 1000);
+            let payload = {
+                "method": method,
+                "args": args
+            };
 
-        this.pendingCalls.set(id, {
-            "method": method,
-            "args": args,
-            "callback": callback,
-            "timeout": timeout
+            this.pendingCalls.set(id, {
+                "method": method,
+                "args": args,
+                "callback": callback,
+                "resolve": resolve,
+                "reject": reject,
+                "timeout": timeout
+            });
+
+            this.socket.send(DispatcherClient.__pack("rpc", "call", payload, id));
         });
-
-        this.socket.send(DispatcherClient.__pack("rpc", "call", payload, id));
     }
 
     subscribe(pattern)

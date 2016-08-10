@@ -27,7 +27,7 @@
 import os
 import copy
 from collections import OrderedDict
-from freenas.utils.query import wrap
+from freenas.utils import query as q
 from freenas.dispatcher.rpc import RpcException
 
 
@@ -163,9 +163,9 @@ class EntitySubscriber(object):
 
     def query(self, *filter, **params):
         if self.remote:
-            return wrap(self.client.call_sync('{0}.query'.format(self.name), filter, params, streaming=True))
+            return self.client.call_sync('{0}.query'.format(self.name), filter, params, streaming=True)
 
-        return wrap(list(self.items.values())).query(*filter, **params)
+        return q.query(list(self.items.values()), *filter, **params)
 
     def get(self, id, timeout=None):
         val = self.items.get(id)
@@ -175,7 +175,7 @@ class EntitySubscriber(object):
         return self.items.get(id)
 
     def viewport(self, *filter, **params):
-        return wrap(list(self.items.values())).query(*filter, **params)
+        return q.query(list(self.items.values()), *filter, **params)
 
     def update(self, obj, event=True):
         oldobj = self.items.get(obj['id'])

@@ -42,6 +42,9 @@ from freenas.utils import iter_chunked
 from jsonschema import RefResolver
 
 
+_tls = threading.local()
+
+
 class RpcContext(object):
     def __init__(self):
         self.logger = logging.getLogger('RpcContext')
@@ -151,8 +154,8 @@ class RpcContext(object):
             elif type(args) is list:
                 args.append(sender)
 
-        tls = threading.local()
-        tls.sender = sender
+        # Put a reference in thread-local storage
+        _tls.sender = sender
 
         try:
             if type(args) is dict:
@@ -546,5 +549,4 @@ def generator(fn):
 
 
 def get_sender():
-    data = threading.local()
-    return data.sender
+    return getattr(_tls, 'sender', None)

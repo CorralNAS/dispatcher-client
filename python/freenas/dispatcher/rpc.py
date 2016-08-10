@@ -543,3 +543,8 @@ def private(fn):
 def generator(fn):
     fn.generator = True
     return fn
+
+
+def get_sender():
+    data = threading.local()
+    return data.sender

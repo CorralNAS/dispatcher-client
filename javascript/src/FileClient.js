@@ -141,7 +141,7 @@ export class FileClient
                     result => {
                         this.token = result;
                         this.socket = new WebSocket(
-                            typeof url != 'undefined' ? url : `ws://${this.client.hostname}:5000/file`;
+                            typeof url != 'undefined' ? url : `ws://${this.client.hostname}:5000/file`
                         );
                         if (this.socket instanceof WebSocket) {
                           Object.assign(

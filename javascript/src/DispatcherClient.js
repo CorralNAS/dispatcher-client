@@ -135,7 +135,9 @@ export class DispatcherClient
                 else
                     call.resolve !== undefined && call.resolve(result);
 
-                call.callback(result);
+                if (call.callback !== undefined)
+                    call.callback(result);
+                
                 this.pendingCalls.delete(data.id);
             }
         }

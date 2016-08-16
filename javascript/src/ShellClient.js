@@ -25,11 +25,10 @@
  *
  */
 
-export class ShellClient
+export class StreamClient
 {
-    constructor(client)
+    constructor()
     {
-        this.client = client;
         this.socket = null;
         this.token = null;
         this.authenticated = false;
@@ -71,17 +70,14 @@ export class ShellClient
         reader.readAsBinaryString(msg.data);
     }
 
-    connect(command)
+    connect(token, url)
     {
-        /* Request shell connection */
-        this.client.call("shell.spawn", [command], result => {
-            this.token = result;
-            this.socket = new WebSocket(`ws://${this.client.hostname}:5000/shell`);
-            this.socket.onopen = this.__onopen.bind(this);
-            this.socket.onmessage = this.__onmessage.bind(this);
-            this.socket.onclose = this.__onclose.bind(this);
-            this.onOpen();
-        });
+        this.token = token;
+        this.socket = new WebSocket(url);
+        this.socket.onopen = this.__onopen.bind(this);
+        this.socket.onmessage = this.__onmessage.bind(this);
+        this.socket.onclose = this.__onclose.bind(this);
+        this.onOpen();
     }
 
     disconnect()
@@ -100,6 +96,22 @@ export class ShellClient
 }
 
 
+export class ShellClient extends StreamClient
+{
+    constructor(client)
+    {
+        this.client = client;
+    }
+
+    connect(command)
+    {
+        this.client.call("shell.spawn", [command], result => {
+            super.connect(result, `ws://${this.client.hostname}:5000/stream`);
+        });
+    }
+}
+
+
 export class ContainerConsoleClient extends ShellClient
 {
     constructor(client)
@@ -111,12 +123,7 @@ export class ContainerConsoleClient extends ShellClient
     {
         /* Request shell connection */
         this.client.call("containerd.management.request_console", [container], result => {
-            this.token = result;
-            this.socket = new WebSocket(`ws://${this.client.hostname}:5500/console`);
-            this.socket.onopen = this.__onopen.bind(this);
-            this.socket.onmessage = this.__onmessage.bind(this);
-            this.socket.onclose = this.__onclose.bind(this);
-            this.onOpen();
+            super.connect(result, `ws://${this.client.hostname}:5500/console`);
         });
     }
 }

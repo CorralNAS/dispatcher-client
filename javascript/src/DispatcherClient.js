@@ -37,7 +37,7 @@ const OTHER = 8;
 
 import { getErrno, getCode } from './ErrnoCodes.js'
 export { getErrno, getCode }
-export { ShellClient, ContainerConsoleClient } from './ShellClient'
+export { StreamClient, ShellClient, ContainerConsoleClient } from './ShellClient'
 export { FileClient } from "./FileClient"
 export { EntitySubscriber } from './EntitySubscriber.js'
 

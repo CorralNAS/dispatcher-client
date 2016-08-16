@@ -100,6 +100,7 @@ export class ShellClient extends StreamClient
 {
     constructor(client)
     {
+        super();
         this.client = client;
     }
 
@@ -116,7 +117,8 @@ export class ContainerConsoleClient extends ShellClient
 {
     constructor(client)
     {
-        super(client);
+        super();
+        this.client = client;
     }
 
     connect(container)

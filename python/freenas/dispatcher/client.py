@@ -57,6 +57,12 @@ _debug_log_file = None
 
 
 def debug_log(message, *args):
+    """ Write messages to the debug log.
+
+    Args:
+        message (str): The message to write.
+        args (tuple): Variables whose values will be formatted to the debug message.
+    """
     global _debug_log_file
 
     if os.getenv('DISPATCHER_CLIENT_DEBUG'):

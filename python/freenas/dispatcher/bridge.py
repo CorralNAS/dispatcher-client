@@ -35,19 +35,19 @@ class Bridge(object):
             self.opposite_transport = parent.transports[(index + 1) % 2]
 
         def on_message(self, msg, fds=None):
-            """ Send a message to the other side
+            """ Send a message to the other side.
 
             Args:
-                msg (string): The message to send
-                fds (list): The file descriptors list
+                msg (string): The message to send.
+                fds (list): The file descriptors list.
             """
             self.opposite_transport.send(msg.decode('utf-8'), fds or [])
 
         def on_close(self, reason):
-            """ Close the other side upon closing the bridge
+            """ Close the other side upon closing the bridge.
             
             Args:
-                reason (str): The reason for closing
+                reason (str): The reason for closing.
             """
             self.opposite_transport.close()
 
@@ -56,11 +56,11 @@ class Bridge(object):
         self.transports = None
 
     def start(self, uri1, uri2):
-        """ Opens a bridge between two endpoints
+        """ Opens a bridge between two endpoints.
 
         Args:
-            uri1 (str): The uri for the first endpoint
-            uri2 (str): The uri for the second endpoint
+            uri1 (str): The uri for the first endpoint.
+            uri2 (str): The uri for the second endpoint.
         """
         uris = [urlparse(uri1), urlparse(uri2)]
         self.transports = [

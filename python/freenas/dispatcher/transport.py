@@ -177,16 +177,16 @@ class ClientTransportWS(ClientTransport):
         self.opened = Event()
 
     def connect(self, url, parent, **kwargs):
-        """ Open a connection
+        """ Open a connection.
 
         Args:
-            url (ParseResult): The url to open
-            parent (Connection): The connection wrapper class object
+            url (ParseResult): The url to open.
+            parent (Connection): The connection wrapper class object.
 
         Kwargs:
-            username (str): The username to login with
-            hostname (str): The hostname to connect to
-            port (int): The port to connect to
+            username (str): The username to login with.
+            hostname (str): The hostname to connect to.
+            port (int): The port to connect to.
 
         Raises:
             RuntimeError, ValueError

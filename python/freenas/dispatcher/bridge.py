@@ -45,6 +45,12 @@ class Bridge(object):
         self.transports = None
 
     def start(self, uri1, uri2):
+        """ Opens a bridge between two endpoints
+
+        Args:
+            uri1 (str): The uri for the first endpoint
+            uri2 (str): The uri for the second endpoint
+        """
         uris = [urlparse(uri1), urlparse(uri2)]
         self.transports = [
             ClientTransport(uris[0].scheme),

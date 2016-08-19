@@ -83,6 +83,14 @@ class PendingIterator(object):
         self.seqno = 0
 
     def advance(self):
+        """ Advances the iterator.
+
+        Raises:
+            StopIteration
+
+        Returns:
+            A tuple containing the next value from the iteration and the sequence number.
+        """
         with self.lock:
             try:
                 val = next(self.iter)
@@ -93,6 +101,8 @@ class PendingIterator(object):
             return val, self.seqno
 
     def close(self):
+        """ Closes the iterator.
+        """
         with self.lock:
             self.iter.close()
 

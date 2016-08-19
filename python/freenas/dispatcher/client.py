@@ -182,6 +182,20 @@ class Connection(object):
         pass
 
     def pack(self, namespace, name, args=None, id=None):
+        """ Encodes the current call into JSON.
+
+        Args:
+            namespace (str): The namespace the call comes from.
+            name (str): The name of the call.
+            args (tuple): The arguments for the current call.
+            id (int): The task id.
+
+        Raises:
+            UnicodeEncodeError
+
+        Returns:
+            A tuple containing the result JSON and the file descriptors list.
+        """
         fds = list(self.channel_serializer.collect_fds(args))
         try:
             result = dumps({

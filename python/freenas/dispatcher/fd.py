@@ -93,7 +93,7 @@ class MSockChannelSerializer(ChannelSerializer):
         self.msock = msock
 
     def __fd_to_channel(self, fd):
-        chan = first_or_default(lambda c: c.fileno() == fd, self.msock.channels.values())
+        chan = first_or_default(lambda c: c.id == fd, self.msock.channels.values())
         return chan.id if chan else -1
 
     def __channel_to_fd(self, id):
@@ -101,7 +101,7 @@ class MSockChannelSerializer(ChannelSerializer):
         if not chan:
             chan = self.msock.create_channel(id)
 
-        return chan.fileno()
+        return id
 
     def collect_fds(self, obj, start=0):
         if isinstance(obj, dict):

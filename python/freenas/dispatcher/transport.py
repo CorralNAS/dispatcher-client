@@ -474,7 +474,6 @@ class ClientTransportFD(ClientTransport):
         self.parent = parent
         if 'fobj' in kwargs:
             self.fobj = kwargs.pop('fobj')
-            self.fd = self.fobj.fileno()
         else:
             self.fd = int(url.hostname)
             self.fobj = os.fdopen(self.fd, 'w+b', 0)

@@ -28,6 +28,7 @@
 import base64
 import json
 import uuid
+import re
 from datetime import datetime
 from dateutil.parser import parse
 
@@ -39,6 +40,9 @@ class JsonEncoder(json.JSONEncoder):
 
         if type(obj) is datetime:
             return {'$date': str(obj)}
+
+        if type(obj) is re._pattern_type:
+            return {'$regex': obj.pattern}
 
         if type(obj) is bytes:
             return {'$binary': base64.b64encode(obj).decode('ascii')}
@@ -59,6 +63,9 @@ def decode_hook(obj):
 
         if '$binary' in obj:
             return base64.b64decode(obj['$binary'])
+
+        if '$regex' in obj:
+            return re.compile(obj['$regex'])
 
     return obj
 

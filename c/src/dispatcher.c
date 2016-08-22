@@ -324,7 +324,13 @@ dispatcher_on_event(connection_t *conn, event_callback_t *cb, void *arg)
 int
 rpc_call_wait(rpc_call_t *call)
 {
-	return (pthread_cond_wait(&call->rc_cv, &call->rc_mtx));
+	pthread_mutex_lock(&call->rc_mtx);
+
+	while (call->rc_status == RPC_CALL_IN_PROGRESS)
+		pthread_cond_wait(&call->rc_cv, &call->rc_mtx));
+
+	pthread_mutex_unlock(&call->rc_mtx);
+	return (0);
 }
 
 int
@@ -358,15 +364,27 @@ rpc_call_abort(rpc_call_t *call)
             json_null());
 
         ret = dispatcher_send_msg(call->rc_conn, msg);
-
         return (ret);
 }
 
 int
 rpc_call_timedwait(rpc_call_t *call, const struct timespec *abstime)
 {
-	return (pthread_cond_timedwait(&call->rc_cv, &call->rc_mtx,
-	    abstime));
+	int err;
+
+	pthread_mutex_lock(&call->rc_mtx);
+
+	while (call->rc_status == RPC_CALL_IN_PROGRESS) {
+		err = pthread_cond_timedwait(&call->rc_cv, &call->rc_mtx,
+		    abstime);
+		if (err != 0) {
+			pthread_mutex_unlock(&call->rc_mtx);
+			return (err);
+		}
+	}
+
+	pthread_mutex_unlock(&call->rc_mtx);
+	return (0);
 }
 
 int
@@ -422,9 +440,11 @@ dispatcher_call_internal(connection_t *conn, const char *type,
 
 	if (dispatcher_send_msg(conn, msg) < 0) {
 		json_decref(msg);
+		pthread_mutex_unlock(&call->rc_mtx);
 		return (-1);
 	}
 
+	pthread_mutex_unlock(&call->rc_mtx);
 	return (0);
 }
 
@@ -544,6 +564,8 @@ dispatcher_process_rpc(connection_t *conn, json_t *msg)
 
 	TAILQ_FOREACH_SAFE(call, &conn->conn_calls, rc_link, tmp) {
 		if (!strcmp(id, json_string_value(call->rc_id))) {
+			pthread_mutex_lock(&call->rc_mtx);
+
                         if (call->rc_result != NULL)
                                 json_decref(call->rc_result);
                         
@@ -566,6 +588,8 @@ dispatcher_process_rpc(connection_t *conn, json_t *msg)
                         }
 
 			dispatcher_answer_call(call);
+			pthread_cond_broadcast(&call->rc_cv);
+			pthread_mutex_unlock(&call->rc_mtx);
 		}
 	}
 
@@ -602,8 +626,6 @@ dispatcher_answer_call(rpc_call_t *call)
 		    call->rc_status, call->rc_result,
 		    call->rc_callback_arg);
 	}
-
-	pthread_cond_broadcast(&call->rc_cv);
 }
 
 struct tm *

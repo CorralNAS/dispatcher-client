@@ -327,7 +327,7 @@ rpc_call_wait(rpc_call_t *call)
 	pthread_mutex_lock(&call->rc_mtx);
 
 	while (call->rc_status == RPC_CALL_IN_PROGRESS)
-		pthread_cond_wait(&call->rc_cv, &call->rc_mtx));
+		pthread_cond_wait(&call->rc_cv, &call->rc_mtx);
 
 	pthread_mutex_unlock(&call->rc_mtx);
 	return (0);

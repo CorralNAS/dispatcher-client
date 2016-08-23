@@ -63,7 +63,7 @@ class ShellClient(object):
             if callable(self.parent.close_callback):
                 self.parent.close_callback()
 
-    def __init__(self, hostname, token, port=5000):
+    def __init__(self, hostname, token, port=80):
         self.hostname = hostname
         self.path = 'shell'
         self.port = port
@@ -76,7 +76,7 @@ class ShellClient(object):
 
     def open(self):
         self.connection = self.ShellWebsocketHandler(
-            'ws://{0}:{1}/{2}'.format(self.hostname, self.port, self.path),
+            'ws://{0}:{1}/dispatcher/{2}'.format(self.hostname, self.port, self.path),
             self
         )
         self.connection.connect()

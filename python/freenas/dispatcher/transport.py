@@ -197,7 +197,7 @@ class ClientTransportWS(ClientTransport):
         Raises:
             RuntimeError, ValueError
         """
-        self.scheme_default_port = 5000
+        self.scheme_default_port = 80
         self.parent = parent
         self.username = url.username
         self.port = url.port
@@ -234,7 +234,7 @@ class ClientTransportWS(ClientTransport):
             if 'port' in kwargs:
                 raise ValueError('Port cannot be delared in both url and arguments.')
 
-        ws_url = 'ws://{0}:{1}/socket'.format(self.hostname, self.port)
+        ws_url = 'ws://{0}:{1}/dispatcher/socket'.format(self.hostname, self.port)
         self.ws = self.WebSocketHandler(ws_url, self)
         self.ws.connect()
         self.opened.wait()

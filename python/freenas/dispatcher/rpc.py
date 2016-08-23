@@ -310,7 +310,7 @@ class RpcException(Exception):
 
     def __str__(self):
         return "{0}: {1} {2}".format(
-            errno.errorcode[self.code],
+            errno.errorcode.get(self.code, '<unknown errno {0}>'.format(self.code)),
             self.message,
             self.extra if self.extra else '')
 

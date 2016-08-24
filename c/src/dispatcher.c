@@ -338,19 +338,25 @@ rpc_call_continue(rpc_call_t *call, bool wait)
 {
         json_t *msg;
         int seqno;
-        int ret;
+
+	pthread_mutex_lock(&call->rc_mtx);
 
         seqno = call->rc_seqno + 1;
         msg = dispatcher_pack_msg("rpc", "continue", call->rc_id,
             json_integer(seqno));
 
-        ret = dispatcher_send_msg(call->rc_conn, msg);
+        if (dispatcher_send_msg(call->rc_conn, msg) != 0) {
+		pthread_mutex_unlock(&call->rc_mtx);
+		return (-1);
+	}
 
         if (wait) {
                 rpc_call_wait(call);
+		pthread_mutex_unlock(&call->rc_mtx);
                 return (rpc_call_success(call));
         }
 
+	pthread_mutex_unlock(&call->rc_mtx);
         return (0);
 }
 

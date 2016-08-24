@@ -65,7 +65,7 @@ class ShellClient(object):
 
     def __init__(self, hostname, token, port=80):
         self.hostname = hostname
-        self.path = 'shell'
+        self.path = 'dispatcher/shell'
         self.port = port
         self.token = token
         self.connection = None
@@ -76,7 +76,7 @@ class ShellClient(object):
 
     def open(self):
         self.connection = self.ShellWebsocketHandler(
-            'ws://{0}:{1}/dispatcher/{2}'.format(self.hostname, self.port, self.path),
+            'ws://{0}:{1}/{2}'.format(self.hostname, self.port, self.path),
             self
         )
         self.connection.connect()
@@ -104,4 +104,4 @@ class ShellClient(object):
 class VMConsoleClient(ShellClient):
     def __init__(self, hostname, token, port=5500):
         super(VMConsoleClient, self).__init__(hostname, token, port)
-        self.path = 'console'
+        self.path = 'containerd/console'

@@ -56,6 +56,7 @@ class Server(object):
         self.connection_class = connection_class
         self.parsed_url = None
         self.scheme = None
+        self.streaming = False
         self.transport = None
         self.rpc = None
         self.channel_serializer = None
@@ -85,6 +86,9 @@ class Server(object):
         conn.transport = handler
         if not conn.rpc:
             conn.rpc = self.rpc
+
+        if self.streaming:
+            conn.streaming = self.streaming
 
         return conn
 

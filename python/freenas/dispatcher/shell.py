@@ -102,6 +102,6 @@ class ShellClient(object):
 
 
 class VMConsoleClient(ShellClient):
-    def __init__(self, hostname, token, port=5500):
+    def __init__(self, hostname, token, port=80):
         super(VMConsoleClient, self).__init__(hostname, token, port)
         self.path = 'containerd/console'

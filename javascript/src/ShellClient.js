@@ -107,7 +107,7 @@ export class ShellClient extends StreamClient
     connect(command)
     {
         this.client.call("shell.spawn", [command], result => {
-            super.connect(result, `ws://${this.client.hostname}:5000/stream`);
+            super.connect(result, `ws://${this.client.hostname}/dispatcher/stream`);
         });
     }
 }

@@ -197,7 +197,7 @@ export class DispatcherClient
 
     connect()
     {
-        this.socket = new WebSocket(`ws://${this.hostname}:5000/socket`);
+        this.socket = new WebSocket(`ws://${this.hostname}/dispatcher/socket`);
         this.socket.onmessage = this.__onmessage.bind(this);
         this.socket.onopen = this.__onopen.bind(this);
         this.socket.onclose = this.__onclose.bind(this);

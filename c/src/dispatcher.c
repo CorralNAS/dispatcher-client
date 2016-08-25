@@ -123,7 +123,7 @@ dispatcher_open(const char *hostname)
 		    (unix_close_handler_t)dispatcher_abort;
 		conn->conn_unix->unix_close_handler_arg = conn;
 	} else {
-		asprintf(&uri, "http://%s:5000/socket", netloc);
+		asprintf(&uri, "http://%s/dispatcher/socket", netloc);
 		conn->conn_ws = ws_connect(uri);
 		if (conn->conn_ws == NULL) {
 			free(conn);

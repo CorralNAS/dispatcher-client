@@ -97,7 +97,7 @@ export class FileClient
                 [destPath, size, mode],
                 result => {
                     this.token = result;
-                    this.socket = new WebSocket(`ws://${this.client.hostname}:5000/file`);
+                    this.socket = new WebSocket(`ws://${this.client.hostname}/dispatcher/file`);
                     if (this.socket instanceof WebSocket) {
                         Object.assign(
                             this.socket,
@@ -141,7 +141,7 @@ export class FileClient
                     result => {
                         this.token = result;
                         this.socket = new WebSocket(
-                            typeof url != 'undefined' ? url : `ws://${this.client.hostname}:5000/file`
+                            typeof url != 'undefined' ? url : `ws://${this.client.hostname}/dispatcher/file`
                         );
                         if (this.socket instanceof WebSocket) {
                           Object.assign(
@@ -172,7 +172,7 @@ export class FileClient
                     result => {
                         this.token = result;
                         var downloadLink = document.createElement("a");
-                        downloadLink.href = `http://${this.client.hostname}:5000/filedownload?token=${this.token}`;
+                        downloadLink.href = `http://${this.client.hostname}/dispatcher/filedownload?token=${this.token}`;
                         downloadLink.download = filename;
                         downloadLink.click();
                     }

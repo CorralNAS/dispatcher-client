@@ -163,7 +163,7 @@ class EntitySubscriber(object):
 
     def query(self, *filter, **params):
         if self.remote:
-            return self.client.call_sync('{0}.query'.format(self.name), filter, params, streaming=True)
+            return self.client.call_sync('{0}.query'.format(self.name), filter, params)
 
         return q.query(list(self.items.values()), *filter, **params)
 

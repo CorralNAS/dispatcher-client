@@ -431,7 +431,6 @@ class Connection(object):
 
         self.trace('RPC call: id={0} method={1} args={2}'.format(id, data['method'], data['args']))
         spawn_thread(run_async, id, data, threadpool=True)
-        return
 
     def on_rpc_continue(self, id, data):
         self.trace('RPC continuation: id={0}, seqno={1}'.format(id, data))
@@ -441,15 +440,27 @@ class Connection(object):
             self.send_error(id, errno.ENOENT, 'Invalid call')
             return
 
-        try:
-            fragment, seqno = self.pending_iterators[id].advance()
-            self.trace('RPC response fragment: id={0} seqno={1} result={2}'.format(id, seqno, fragment))
-            self.send_fragment(id, seqno, fragment)
-        except StopIteration as stp:
-            self.trace('RPC response end: id={0} seqno={1}'.format(id, stp.args[0]))
-            self.send_end(id, stp.args[0])
-            del self.pending_iterators[id]
-            return
+        def run_async(id):
+            try:
+                fragment, seqno = self.pending_iterators[id].advance()
+                self.trace('RPC response fragment: id={0} seqno={1} result={2}'.format(id, seqno, fragment))
+                self.send_fragment(id, seqno, fragment)
+            except StopIteration as stp:
+                self.trace('RPC response end: id={0} seqno={1}'.format(id, stp.args[0]))
+                self.send_end(id, stp.args[0])
+                del self.pending_iterators[id]
+            except rpc.RpcException as err:
+                self.trace('RPC error: id={0} code={0} message={1} extra={2}'.format(
+                    id,
+                    err.code,
+                    err.message,
+                    err.extra
+                ))
+
+                self.send_error(id, err.code, err.message, err.extra)
+                del self.pending_iterators[id]
+
+        spawn_thread(run_async, id, threadpool=True)
 
     def on_rpc_abort(self, id, data):
         self.trace('RPC abort: id={0}'.format(id))

@@ -56,7 +56,7 @@ class CappedDict(OrderedDict):
 
 
 class EntitySubscriber(object):
-    def __init__(self, client, name, maxsize=2000):
+    def __init__(self, client, name, maxsize=1000):
         self.client = client
         self.name = name
         self.event_handler = None

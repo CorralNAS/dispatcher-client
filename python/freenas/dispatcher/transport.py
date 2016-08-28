@@ -716,7 +716,7 @@ class ServerTransportUnix(ServerTransport):
 
                 except (OSError, ValueError, socket.timeout) as err:
                     self.server.logger.info('Send failed: {0}; closing connection'.format(str(err)))
-                    if err.errno != errno.EBADF:
+                    if err.errno not in (errno.EBADF, errno.EPIPE):
                         self.connfd.shutdown(socket.SHUT_RDWR)
 
         def handle_connection(self):

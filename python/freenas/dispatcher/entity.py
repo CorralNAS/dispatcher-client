@@ -105,7 +105,7 @@ class EntitySubscriber(object):
                 for cbf in self.on_add:
                     cbf(i)
 
-            if len(self.items) == self.items.maxsize:
+            if len(self.items) >= self.items.maxsize:
                 self.remote = True
 
     def __update(self, items, event=True):

@@ -140,6 +140,10 @@ class EntitySubscriber(object):
                 for cbf in self.on_update:
                     cbf(oldi, newi)
 
+            if oldi['id'] in self.listeners:
+                for i in self.listeners[oldi['id']]:
+                    i.put(('update', oldi, newi))
+
             del self.items[old]
 
     def __len__(self):

@@ -182,7 +182,8 @@ class EntitySubscriber(object):
         if self.remote:
             return self.client.call_sync('{0}.query'.format(self.name), filter, params)
 
-        return q.query(list(self.items.values()), *filter, **params)
+        with self.cv:
+            return q.query(list(self.items.values()), *filter, **params)
 
     def get(self, id, timeout=None):
         if self.remote:
@@ -195,7 +196,8 @@ class EntitySubscriber(object):
             return self.items.get(id)
 
     def viewport(self, *filter, **params):
-        return q.query(list(self.items.values()), *filter, **params)
+        with self.cv:
+            return q.query(list(self.items.values()), *filter, **params)
 
     def update(self, obj, event=True):
         oldobj = self.items.get(obj['id'])

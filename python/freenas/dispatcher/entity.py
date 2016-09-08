@@ -27,6 +27,7 @@
 import os
 import copy
 from collections import OrderedDict
+from threading import Condition
 from freenas.utils import query as q
 from freenas.dispatcher.rpc import RpcException
 
@@ -67,27 +68,27 @@ class EntitySubscriber(object):
         self.on_error = set()
         self.remote = False
         self.ready = Event()
+        self.cv = Condition()
         self.listeners = {}
 
     def __on_changed(self, args, event=True):
         if event:
             self.ready.wait()
 
-        if args['operation'] == 'create':
-            self.__add(args['entities'], event)
-            return
+        with self.cv:
+            if args['operation'] == 'create':
+                self.__add(args['entities'], event)
 
-        if args['operation'] == 'update':
-            self.__update(args['entities'], event)
-            return
+            if args['operation'] == 'update':
+                self.__update(args['entities'], event)
 
-        if args['operation'] == 'delete':
-            self.__delete(args['ids'], event)
-            return
+            if args['operation'] == 'delete':
+                self.__delete(args['ids'], event)
 
-        if args['operation'] == 'rename':
-            self.__rename(args['ids'], event)
-            return
+            if args['operation'] == 'rename':
+                self.__rename(args['ids'], event)
+
+            self.cv.notify_all()
 
     def __add(self, items, event=True):
         if items is None:
@@ -151,9 +152,13 @@ class EntitySubscriber(object):
 
     def start(self):
         def callback(result):
-            self.__add(result, False)
-            self.ready.set()
-            return True
+            with self.cv:
+                self.__add(result, False)
+                self.cv.notify_all()
+                if result is None:
+                    self.ready.set()
+
+                return True
 
         self.client.call_async(
             '{0}.query'.format(self.name),
@@ -180,11 +185,14 @@ class EntitySubscriber(object):
         return q.query(list(self.items.values()), *filter, **params)
 
     def get(self, id, timeout=None):
-        val = self.items.get(id)
-        if val is not None or timeout is None:
-            return val
-        sleep(timeout)
-        return self.items.get(id)
+        if self.remote:
+            return self.query(('id', '=', id), single=True)
+
+        with self.cv:
+            if not self.cv.wait_for(lambda: id in self.items, timeout):
+                return None
+
+            return self.items.get(id)
 
     def viewport(self, *filter, **params):
         return q.query(list(self.items.values()), *filter, **params)

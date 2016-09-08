@@ -122,6 +122,10 @@ class EntitySubscriber(object):
                 for cbf in self.on_delete:
                     cbf(self.items[i])
 
+            if i in self.listeners:
+                for q in self.listeners[i]:
+                    q.put(('delete', None, None))
+
             del self.items[i]
 
     def __rename(self, ids, event=True):

@@ -24,25 +24,16 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-import os
 import copy
 from collections import OrderedDict
-from threading import Condition
+from threading import Condition, Event
 from freenas.utils import query as q
 from freenas.dispatcher.rpc import RpcException
 
-
-if os.getenv("DISPATCHERCLIENT_TYPE") == "GEVENT":
-    from gevent.queue import Queue
-    from gevent.event import Event
-    from gevent import sleep
-else:
-    from threading import Event
-    from time import sleep
-    try:
-        from queue import Queue
-    except ImportError:
-        from Queue import Queue
+try:
+    from queue import Queue
+except ImportError:
+    from Queue import Queue
 
 
 class CappedDict(OrderedDict):

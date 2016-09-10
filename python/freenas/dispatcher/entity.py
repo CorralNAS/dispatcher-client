@@ -217,12 +217,11 @@ class EntitySubscriber(object):
     def listen(self, id):
         q = Queue(1)
         self.listeners.setdefault(id, []).append(q)
-        while True:
-            try:
+        try:
+            while True:
                 yield q.get()
-            except GeneratorExit:
-                self.listeners[id].remove(q)
-                raise StopIteration
+        finally:
+            self.listeners[id].remove(q)
 
     def wait_ready(self, timeout=None):
         self.ready.wait(timeout)

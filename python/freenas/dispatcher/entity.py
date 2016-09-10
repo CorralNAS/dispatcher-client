@@ -107,8 +107,8 @@ class EntitySubscriber(object):
                     cbf(i)
 
             if i['id'] in self.listeners:
-                for i in self.listeners[i['id']]:
-                    i.put(('create', i, i))
+                for q in self.listeners[i['id']]:
+                    q.put(('create', i, i))
 
             if len(self.items) >= self.items.maxsize:
                 self.remote = True

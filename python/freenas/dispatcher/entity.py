@@ -215,7 +215,7 @@ class EntitySubscriber(object):
                 i.put(('update', oldobj, obj))
 
     def listen(self, id):
-        q = Queue(1)
+        q = Queue()
         self.listeners.setdefault(id, []).append(q)
         try:
             while True:

@@ -140,9 +140,12 @@ class RpcContext(object):
         except AttributeError:
             raise RpcException(errno.ENOENT, "Method not found")
 
+        if sender and sender.user is None and not getattr(func, 'unauthenticated', False):
+            raise RpcException(errno.EACCES, 'Not logged in')
+
         if hasattr(func, 'required_roles'):
             for i in func.required_roles:
-                if not self.user.has_role(i):
+                if sender and not sender.user.has_role(i):
                     raise RpcException(errno.EACCES, 'Insufficent privileges')
 
         if hasattr(func, 'params_schema') and validation:
@@ -545,6 +548,11 @@ def private(fn):
 
 def generator(fn):
     fn.generator = True
+    return fn
+
+
+def unauthenticated(fn):
+    fn.unauthenticated = True
     return fn
 
 

@@ -140,13 +140,17 @@ class RpcContext(object):
         except AttributeError:
             raise RpcException(errno.ENOENT, "Method not found")
 
-        if sender and sender.user is None and not getattr(func, 'unauthenticated', False):
-            raise RpcException(errno.EACCES, 'Not logged in')
+        if hasattr(sender, 'user'):
+            if sender and sender.user is None and not getattr(func, 'unauthenticated', False):
+                raise RpcException(errno.EACCES, 'Not logged in')
 
-        if hasattr(func, 'required_roles'):
-            for i in func.required_roles:
-                if sender and not sender.user.has_role(i):
+            if hasattr(func, 'required_roles'):
+                if sender.user is None:
                     raise RpcException(errno.EACCES, 'Insufficent privileges')
+
+                for i in func.required_roles:
+                    if sender and not sender.user.has_role(i):
+                        raise RpcException(errno.EACCES, 'Insufficent privileges')
 
         if hasattr(func, 'params_schema') and validation:
             self.validate_call(args, func.params_schema)

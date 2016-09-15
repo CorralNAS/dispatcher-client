@@ -558,6 +558,9 @@ class ClientTransportUnix(ClientTransport):
                     debug_log('Connected to {0}', self.path)
                     break
                 except (socket.error, OSError) as err:
+                    if err.errno == errno.EPERM:
+                        raise
+
                     if timeout:
                         timeout -= 1
                         time.sleep(1)

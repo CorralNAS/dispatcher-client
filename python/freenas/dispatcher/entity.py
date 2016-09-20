@@ -170,11 +170,10 @@ class EntitySubscriber(object):
         )
 
     def query(self, *filter, **params):
-        if 'timeout' in params:
-            if params.get('single'):
-                timeout = params.pop('timeout')
-                with self.cv:
-                    return self.cv.wait_for(lambda: q.query(list(self.items.values()), *filter, **params), timeout)
+        if 'timeout' in params and params.get('single'):
+            timeout = params.pop('timeout')
+            with self.cv:
+                return self.cv.wait_for(lambda: q.query(list(self.items.values()), *filter, **params), timeout)
 
         if self.remote:
             return self.client.call_sync('{0}.query'.format(self.name), filter, params)

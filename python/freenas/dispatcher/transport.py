@@ -34,6 +34,7 @@ import socket
 import select
 import time
 import logging
+import contextlib
 from threading import RLock, Event
 from freenas.utils import xrecvmsg, xsendmsg
 from freenas.utils.spawn_thread import spawn_thread
@@ -567,6 +568,9 @@ class ClientTransportUnix(ClientTransport):
                         continue
                     else:
                         self.close()
+                        with contextlib.suppress(OSError):
+                            self.sock.close()
+
                         debug_log('Socket connection exception: {0}', err)
                     raise
         except KeyboardInterrupt:
@@ -647,10 +651,8 @@ class ClientTransportUnix(ClientTransport):
             except OSError:
                 break
 
-        try:
+        with contextlib.suppress(OSError):
             self.sock.close()
-        except OSError:
-            pass
 
         if self.terminated is False:
             self.closed()

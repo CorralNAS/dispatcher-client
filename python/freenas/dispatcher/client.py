@@ -173,7 +173,7 @@ class Connection(object):
         with self.event_distribution_lock:
             if name in self.event_handlers:
                 for h in self.event_handlers[name]:
-                    h(args)
+                    spawn_thread(h, args, threadpool=True)
 
             if self.event_callback:
                 self.event_callback(name, args)

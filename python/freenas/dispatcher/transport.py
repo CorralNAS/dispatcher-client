@@ -35,6 +35,7 @@ import select
 import time
 import logging
 import contextlib
+from freenas.utils.url import wrap_address
 from threading import RLock, Event
 from freenas.utils import xrecvmsg, xsendmsg
 from freenas.utils.spawn_thread import spawn_thread
@@ -235,7 +236,7 @@ class ClientTransportWS(ClientTransport):
             if 'port' in kwargs:
                 raise ValueError('Port cannot be delared in both url and arguments.')
 
-        ws_url = 'ws://{0}:{1}/dispatcher/socket'.format(self.hostname, self.port)
+        ws_url = 'ws://{0}:{1}/dispatcher/socket'.format(wrap_address(self.hostname), self.port)
         self.ws = self.WebSocketHandler(ws_url, self)
         self.ws.connect()
         self.opened.wait()

@@ -35,10 +35,11 @@ import hashlib
 import json
 import itertools
 import threading
+import types
 from datetime import datetime
 from freenas.dispatcher import validator
 from freenas.dispatcher.fd import FileDescriptor
-from freenas.utils import iter_chunked
+from freenas.utils import iter_chunked, serialize_traceback
 from jsonschema import RefResolver
 
 
@@ -310,10 +311,15 @@ class RpcException(Exception):
         self.code = code
         self.message = message
         self.extra = extra
-        if stacktrace is None and sys.exc_info()[2]:
-            self.stacktrace = traceback.format_exc()
-        else:
-            self.stacktrace = stacktrace
+
+        tb = sys.exc_info()[2]
+        if stacktrace is None and tb:
+            stacktrace = tb
+
+        if isinstance(stacktrace, types.TracebackType):
+            stacktrace = serialize_traceback(stacktrace)
+
+        self.stacktrace = stacktrace
 
     def __str__(self):
         return "{0}: {1} {2}".format(

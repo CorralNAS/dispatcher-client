@@ -118,7 +118,7 @@ class EntitySubscriber(object):
                 for q in self.listeners[i]:
                     q.put(('delete', None, None))
 
-            del self.items[i]
+            self.items.pop(i, None)
 
     def __rename(self, ids, event=True):
         for old, new in ids:

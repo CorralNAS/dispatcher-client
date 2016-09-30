@@ -144,6 +144,10 @@ class EntitySubscriber(object):
     def start(self):
         def callback(result):
             with self.cv:
+                if isinstance(result, RpcException):
+                    self.ready.set()
+                    return
+
                 self.__add(result, False)
                 self.cv.notify_all()
                 if result is None:

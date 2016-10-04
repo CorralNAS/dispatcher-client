@@ -113,7 +113,7 @@ class EntitySubscriber(object):
             item = self.items.pop(i, None)
             if event and item:
                 for cbf in self.on_delete:
-                    cbf(self.items[i])
+                    cbf(item)
 
             if i in self.listeners:
                 for q in self.listeners[i]:

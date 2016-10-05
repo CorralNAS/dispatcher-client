@@ -154,12 +154,22 @@ class EntitySubscriber(object):
 
                 return True
 
-        self.client.call_async(
-            '{0}.query'.format(self.name),
-            callback, [],
-            {'limit': self.items.maxsize},
-            streaming=True
-        )
+        # Try to estimate first
+        try:
+            count = self.client.call_sync('{0}.query'.format(self.name), [], {'count': True})
+        except RpcException:
+            count = None
+
+        if count is None or count > self.items.maxsize:
+            self.remote = True
+            self.ready.set()
+        else:
+            self.client.call_async(
+                '{0}.query'.format(self.name),
+                callback, [],
+                {'limit': self.items.maxsize},
+                streaming=True
+            )
 
         self.event_handler = self.client.register_event_handler(
             'entity-subscriber.{0}.changed'.format(self.name),

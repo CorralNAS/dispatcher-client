@@ -687,8 +687,9 @@ class Connection(object):
 
             self.register_event_handler(event, handler)
 
-        done.wait(timeout=timeout)
+        ret = done.wait(timeout=timeout)
         self.unregister_event_handler(event, handler)
+        return ret
 
     def get_lock(self, name):
         self.call_sync('lock.init', name)

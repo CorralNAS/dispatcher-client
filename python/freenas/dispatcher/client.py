@@ -156,6 +156,7 @@ class Connection(object):
         self.pending_iterators = {}
         self.pending_calls = {}
         self.default_timeout = 20
+        self.call_queue_limit = None
         self.event_callback = None
         self.error_callback = None
         self.rpc_callback = None
@@ -394,6 +395,10 @@ class Connection(object):
 
         if 'method' not in data or 'args' not in data:
             self.send_error(id, errno.EINVAL, 'Malformed request')
+            return
+
+        if self.call_queue_limit and len(self.pending_calls) >= self.call_queue_limit:
+            self.send_error(id, errno.EBUSY, 'Number of simultaneous requests exceeded')
             return
 
         def run_async(id, args):

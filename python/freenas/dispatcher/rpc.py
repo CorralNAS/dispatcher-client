@@ -91,7 +91,7 @@ class RpcContext(object):
     def validate_call(self, args, schema):
         errors = []
         if type(args) is dict:
-            val = validator.DefaultDraft4Validator(
+            val = validator.create_validator(
                 validator.schema_to_dict(schema),
                 resolver=self.get_schema_resolver(schema))
 
@@ -103,7 +103,7 @@ class RpcContext(object):
             errors += val.iter_errors(args)
 
         elif type(args) is list:
-            val = validator.DefaultDraft4Validator(
+            val = validator.create_validator(
                 validator.schema_to_list(schema),
                 resolver=self.get_schema_resolver(schema))
 

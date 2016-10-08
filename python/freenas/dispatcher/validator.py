@@ -27,7 +27,7 @@
 
 import errno
 import datetime
-from jsonschema import Draft4Validator
+from jsonschema import Draft4Validator, FormatChecker
 from jsonschema.validators import create
 from jsonschema.exceptions import ValidationError
 from freenas.utils import first_or_default
@@ -68,6 +68,7 @@ def extend_with_default(validator_class):
     def extend(validator, validators, version=None):
         all_validators = dict(validator.VALIDATORS)
         all_validators.update(validators)
+        all_validators.update('')
         all_types = dict(validator.DEFAULT_TYPES)
         all_types.update({
             "fd": FileDescriptor,
@@ -79,7 +80,7 @@ def extend_with_default(validator_class):
             meta_schema=validator.META_SCHEMA,
             validators=all_validators,
             version=version,
-            default_types=all_types,
+            default_types=all_types
         )
 
     def set_defaults(validator, properties, instance, schema):
@@ -140,4 +141,7 @@ def extend_with_default(validator_class):
         },
     )
 
-DefaultDraft4Validator = extend_with_default(Draft4Validator)
+
+def create_validator(schema, resolver):
+    modified_validator = extend_with_default(Draft4Validator)
+    return modified_validator(schema, resolver=resolver, format_checker=FormatChecker())

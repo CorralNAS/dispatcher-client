@@ -141,7 +141,7 @@ class EntitySubscriber(object):
         return len(self.items)
 
     def start(self):
-        def callback(result):
+        def data_callback(result):
             with self.cv:
                 if isinstance(result, RpcException):
                     self.ready.set()
@@ -154,26 +154,31 @@ class EntitySubscriber(object):
 
                 return True
 
-        # Try to estimate first
-        try:
-            count = self.client.call_sync('{0}.query'.format(self.name), [], {'count': True})
-        except RpcException:
-            count = None
+        def count_callback(count):
+            if isinstance(count, RpcException):
+                count = None
 
-        if count is None or count > self.items.maxsize:
-            self.remote = True
-            self.ready.set()
-        else:
-            self.client.call_async(
-                '{0}.query'.format(self.name),
-                callback, [],
-                {'limit': self.items.maxsize},
-                streaming=True
+            if count is None or count > self.items.maxsize:
+                self.remote = True
+                self.ready.set()
+            else:
+                self.client.call_async(
+                    '{0}.query'.format(self.name),
+                    data_callback, [],
+                    {'limit': self.items.maxsize},
+                    streaming=True
+                )
+
+            self.event_handler = self.client.register_event_handler(
+                'entity-subscriber.{0}.changed'.format(self.name),
+                self.__on_changed
             )
 
-        self.event_handler = self.client.register_event_handler(
-            'entity-subscriber.{0}.changed'.format(self.name),
-            self.__on_changed
+        # Try to estimate first
+        self.client.call_async(
+            '{0}.query'.format(self.name),
+            count_callback,
+            [], {'count': True}
         )
 
     def stop(self):

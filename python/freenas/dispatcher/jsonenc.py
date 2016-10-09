@@ -26,11 +26,16 @@
 #####################################################################
 
 import base64
-import json
 import uuid
 import re
 from datetime import datetime
 from dateutil.parser import parse
+
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 
 class JsonEncoder(json.JSONEncoder):

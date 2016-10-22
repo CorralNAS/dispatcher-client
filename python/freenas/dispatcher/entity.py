@@ -199,8 +199,8 @@ class EntitySubscriber(object):
         with self.cv:
             return q.query(list(self.items.values()), *filter, **params)
 
-    def get(self, id, timeout=None):
-        if self.remote:
+    def get(self, id, timeout=None, viewport=False):
+        if self.remote and not viewport:
             return self.query(('id', '=', id), single=True)
 
         with self.cv:

@@ -232,6 +232,8 @@ class EntitySubscriber(object):
         q = Queue()
         self.listeners.setdefault(id, []).append(q)
         try:
+            o = self.get(id, viewport=True)
+            yield ('create', o, o)
             while True:
                 yield q.get()
         finally:

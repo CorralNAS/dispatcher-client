@@ -239,6 +239,11 @@ class EntitySubscriber(object):
         finally:
             self.listeners[id].remove(q)
 
+    def wait_for(self, id, condition, timeout=None):
+        with self.cv:
+            self.cv.wait_for(lambda: id in self.items and condition(self.items[id]), timeout)
+            return self.items[id]
+
     def enforce_update(self, *filter):
         obj = self.query(*filter, remote=True, single=True)
         if obj:

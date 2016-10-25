@@ -193,7 +193,7 @@ class EntitySubscriber(object):
             with self.cv:
                 return self.cv.wait_for(lambda: q.query(list(self.items.values()), *filter, **params), timeout)
 
-        if self.remote:
+        if self.remote or params.get('remote'):
             return self.client.call_sync('{0}.query'.format(self.name), filter, params)
 
         with self.cv:

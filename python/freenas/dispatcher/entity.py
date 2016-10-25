@@ -199,8 +199,8 @@ class EntitySubscriber(object):
         with self.cv:
             return q.query(list(self.items.values()), *filter, **params)
 
-    def get(self, id, timeout=None, viewport=False):
-        if self.remote and not viewport:
+    def get(self, id, timeout=None, viewport=False, remote=True):
+        if remote or (self.remote and not viewport):
             return self.query(('id', '=', id), single=True)
 
         with self.cv:
@@ -238,6 +238,11 @@ class EntitySubscriber(object):
                 yield q.get()
         finally:
             self.listeners[id].remove(q)
+
+    def enforce_update(self, *filter):
+        obj = self.query(*filter, remote=True, single=True)
+        if obj:
+            self.update(obj)
 
     def wait_ready(self, timeout=None):
         self.ready.wait(timeout)

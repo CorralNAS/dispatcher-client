@@ -28,6 +28,7 @@ import copy
 from collections import OrderedDict
 from threading import Condition, Event
 from freenas.utils import query as q
+from freenas.dispatcher.client import sync
 from freenas.dispatcher.rpc import RpcException
 
 try:
@@ -62,6 +63,7 @@ class EntitySubscriber(object):
         self.cv = Condition()
         self.listeners = {}
 
+    @sync
     def __on_changed(self, args, event=True):
         if event:
             self.ready.wait()

@@ -56,6 +56,12 @@ class ClientError(enum.Enum):
 _debug_log_file = None
 
 
+def sync(handler):
+    handler.sync = True
+    handler.lock = RLock()
+    return handler
+
+
 def debug_log(message, *args):
     """ Write messages to the debug log.
 
@@ -174,7 +180,11 @@ class Connection(object):
         with self.event_distribution_lock:
             if name in self.event_handlers:
                 for h in self.event_handlers[name]:
-                    spawn_thread(h, args, threadpool=True)
+                    if getattr(h, 'sync', False):
+                        with h.lock:
+                            spawn_thread(h, args, threadpool=True)
+                    else:
+                        spawn_thread(h, args, threadpool=True)
 
             if self.event_callback:
                 self.event_callback(name, args)

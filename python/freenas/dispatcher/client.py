@@ -182,7 +182,7 @@ class Connection(object):
                 for h in self.event_handlers[name]:
                     if getattr(h, 'sync', False):
                         with h.lock:
-                            spawn_thread(h, args, threadpool=True)
+                            h(args)
                     else:
                         spawn_thread(h, args, threadpool=True)
 

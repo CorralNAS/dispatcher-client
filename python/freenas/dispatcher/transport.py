@@ -394,6 +394,7 @@ class ClientTransportSSH(ClientTransport):
 
         self.channel = self.ssh.get_transport().open_session()
 
+        self.parent.on_open()
         spawn_thread(self.recv)
 
     def send(self, message, fds):
@@ -579,6 +580,7 @@ class ClientTransportUnix(ClientTransport):
             self.sock.close()
             raise
 
+        self.parent.on_open()
         spawn_thread(self.recv)
 
     @property

@@ -32,6 +32,7 @@ import uuid
 import errno
 import time
 import logging
+import contextlib
 from .jsonenc import dumps, loads
 from threading import RLock, Event, Condition
 from queue import Queue
@@ -172,22 +173,30 @@ class Connection(object):
         self.event_emission_lock = RLock()
         self.event_cv = Event()
         self.event_thread = None
+        self.event_queue = Queue()
         self.streaming = False
         self.standalone_server = False
         self.channel_serializer = UnixChannelSerializer()
 
-    def __process_event(self, name, args):
-        with self.event_distribution_lock:
-            if name in self.event_handlers:
-                for h in self.event_handlers[name]:
-                    if getattr(h, 'sync', False):
-                        with h.lock:
-                            h(args)
-                    else:
-                        spawn_thread(h, args, threadpool=True)
+    def __process_events(self):
+        try:
+            while True:
+                name, args = self.event_queue.get()
+                with self.event_distribution_lock:
+                    if name in self.event_handlers:
+                        for h in self.event_handlers[name]:
+                            if getattr(h, 'sync', False):
+                                with h.lock:
+                                    with contextlib.suppress(BaseException):
+                                        h(args)
+                            else:
+                                spawn_thread(h, args, threadpool=True)
 
-            if self.event_callback:
-                self.event_callback(name, args)
+                    if self.event_callback:
+                        with contextlib.suppress(BaseException):
+                            self.event_callback(name, args)
+        except:
+            print('__process_events dieded!')
 
     def trace(self, msg):
         pass
@@ -293,10 +302,11 @@ class Connection(object):
             self.transport.send(data, fds)
 
     def on_open(self):
-        pass
+        self.event_thread = spawn_thread(self.__process_events)
 
     def on_close(self, reason):
-        pass
+        self.event_queue.put(StopIteration)
+        self.event_thread.join()
 
     def on_message(self, message, *args, **kwargs):
         fds = kwargs.pop('fds', [])
@@ -568,11 +578,11 @@ class Connection(object):
                     self.call_sync('plugin.register_service', name)
 
     def on_events_event(self, id, data):
-        spawn_thread(self.__process_event, data['name'], data['args'], threadpool=True)
+        self.event_queue.put((data['name'], data['args']))
 
     def on_events_event_burst(self, id, data):
         for i in data['events']:
-            spawn_thread(self.__process_event, i['name'], i['args'], threadpool=True)
+            self.event_queue.put((i['name'], i['args']))
 
     def on_events_logout(self, id, data):
         self.error_callback(ClientError.LOGOUT)

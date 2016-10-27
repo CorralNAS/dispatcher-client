@@ -25,6 +25,7 @@
 #
 
 import copy
+import contextlib
 from collections import OrderedDict
 from threading import Condition, Event
 from freenas.utils import query as q
@@ -69,19 +70,20 @@ class EntitySubscriber(object):
             self.ready.wait()
 
         with self.cv:
-            if args['operation'] == 'create':
-                self.__add(args['entities'], event)
+            try:
+                if args['operation'] == 'create':
+                    self.__add(args['entities'], event)
 
-            if args['operation'] == 'update':
-                self.__update(args['entities'], event)
+                if args['operation'] == 'update':
+                    self.__update(args['entities'], event)
 
-            if args['operation'] == 'delete':
-                self.__delete(args['ids'], event)
+                if args['operation'] == 'delete':
+                    self.__delete(args['ids'], event)
 
-            if args['operation'] == 'rename':
-                self.__rename(args['ids'], event)
-
-            self.cv.notify_all()
+                if args['operation'] == 'rename':
+                    self.__rename(args['ids'], event)
+            finally:
+                self.cv.notify_all()
 
     def __add(self, items, event=True):
         if items is None:
@@ -216,19 +218,20 @@ class EntitySubscriber(object):
             return q.query(list(self.items.values()), *filter, **params)
 
     def update(self, obj, event=True):
-        oldobj = self.items.get(obj['id'])
-        if not oldobj:
-            return
+        with self.cv:
+            oldobj = self.items.get(obj['id'])
+            if not oldobj:
+                return
 
-        self.items[obj['id']] = obj
+            self.items[obj['id']] = obj
 
-        if event:
-            for cbf in self.on_update:
-                cbf(oldobj, obj)
+            if event:
+                for cbf in self.on_update:
+                    cbf(oldobj, obj)
 
-        if obj['id'] in self.listeners:
-            for i in self.listeners[obj['id']]:
-                i.put(('update', oldobj, obj))
+            if obj['id'] in self.listeners:
+                for i in self.listeners[obj['id']]:
+                    i.put(('update', oldobj, obj))
 
     def listen(self, id):
         q = Queue()
@@ -247,9 +250,11 @@ class EntitySubscriber(object):
             return self.items[id]
 
     def enforce_update(self, *filter):
-        obj = self.query(*filter, remote=True, single=True)
-        if obj:
-            self.update(obj)
+        with self.cv:
+            obj = self.query(*filter, remote=True, single=True)
+            if obj:
+                self.update(obj)
+                self.cv.notify_all()
 
     def wait_ready(self, timeout=None):
         self.ready.wait(timeout)

@@ -205,7 +205,7 @@ class EntitySubscriber(object):
 
     def get(self, id, timeout=None, viewport=False, remote=False):
         if remote or (self.remote and not viewport):
-            return self.query(('id', '=', id), single=True)
+            return self.query(('id', '=', id), single=True, remote=remote)
 
         with self.cv:
             if not self.cv.wait_for(lambda: id in self.items, timeout):

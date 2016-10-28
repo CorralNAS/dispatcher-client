@@ -268,6 +268,14 @@ class ClientTransportWS(ClientTransport):
     def connected(self):
         return self.opened.is_set()
 
+    @property
+    def local_address(self):
+        return self.ws.sock.getsockname()
+
+    @property
+    def peer_address(self):
+        return self.ws.sock.getpeername()
+
 
 @client_transport('ssh', 'ws+ssh')
 class ClientTransportSSH(ClientTransport):
@@ -459,6 +467,14 @@ class ClientTransportSSH(ClientTransport):
     def host_keys(self):
         return self.ssh.get_host_keys()
 
+    @property
+    def local_address(self):
+        return self.ssh._transport.sock.getsockname()
+
+    @property
+    def peer_address(self):
+        return self.ssh._transport.sock.getpeername()
+
 
 @client_transport('fd')
 class ClientTransportFD(ClientTransport):
@@ -528,6 +544,14 @@ class ClientTransportFD(ClientTransport):
 
     def close(self):
         self.doclose()
+
+    @property
+    def local_address(self):
+        return self.address
+
+    @property
+    def peer_address(self):
+        return self.address
 
 
 @client_transport('unix')
@@ -675,6 +699,14 @@ class ClientTransportUnix(ClientTransport):
                 debug_log("Transport socket connection terminated abnormally.")
                 self.terminated = True
                 self.parent.on_close('Going away')
+
+    @property
+    def local_address(self):
+        return self.sock.getsockname()
+
+    @property
+    def peer_address(self):
+        return self.sock.getpeername()
 
 
 @server_transport('unix')

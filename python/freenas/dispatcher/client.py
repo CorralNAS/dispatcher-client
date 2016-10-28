@@ -740,6 +740,14 @@ class Client(Connection):
 
         return self.transport.connected
 
+    @property
+    def local_address(self):
+        return self.transport.local_address
+
+    @property
+    def peer_address(self):
+        return self.transport.peer_address
+
     def wait_forever(self):
         while True:
             time.sleep(60)

@@ -430,7 +430,7 @@ class Connection(object):
                     streaming=self.streaming
                 )
             except rpc.RpcException as err:
-                self.trace('RPC error: id={0} code={0} message={1} extra={2}'.format(
+                self.trace('RPC error: id={0} code={1} message={2} extra={3}'.format(
                     id,
                     err.code,
                     err.message,

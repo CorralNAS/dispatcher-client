@@ -820,7 +820,6 @@ class ServerTransportUnix(ServerTransport):
     def __init__(self, scheme, parsed_url, permissions=0o775):
         self.path = parsed_url.path
         self.sockfd = None
-        self.backlog = 50
         self.permissions = permissions
         self.logger = logging.getLogger('UnixSocketServer')
         self.connections = []
@@ -837,7 +836,7 @@ class ServerTransportUnix(ServerTransport):
             self.sockfd = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.sockfd.bind(self.path)
             os.chmod(self.path, self.permissions)
-            self.sockfd.listen(self.backlog)
+            self.sockfd.listen()
         except OSError as err:
             self.logger.error('Cannot start socket server: {0}'.format(str(err)))
             return

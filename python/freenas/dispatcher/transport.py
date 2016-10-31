@@ -836,7 +836,7 @@ class ServerTransportUnix(ServerTransport):
             self.sockfd = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.sockfd.bind(self.path)
             os.chmod(self.path, self.permissions)
-            self.sockfd.listen()
+            self.sockfd.listen(10)
         except OSError as err:
             self.logger.error('Cannot start socket server: {0}'.format(str(err)))
             return

@@ -51,6 +51,9 @@ xread(int fd, void *buf, size_t nbytes)
 
 	while (done < nbytes) {
 		ret = read(fd, (void *)(buf + done), nbytes - done);
+		if (ret == 0)
+			return (-1);
+
 		if (ret < 0) {
 			if (errno == EINTR || errno == EAGAIN)
 				continue;
@@ -71,6 +74,9 @@ xwrite(int fd, void *buf, size_t nbytes)
 
 	while (done < nbytes) {
 		ret = write(fd, (void *)(buf + done), nbytes - done);
+		if (ret == 0)
+			return (-1);
+
 		if (ret < 0) {
 			if (errno == EINTR || errno == EAGAIN)
 				continue;

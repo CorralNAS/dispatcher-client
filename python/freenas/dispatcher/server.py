@@ -25,6 +25,7 @@
 #
 #####################################################################
 
+import contextlib
 from urllib.parse import urlsplit
 from freenas.dispatcher.rpc import RpcContext
 from freenas.dispatcher.client import Connection
@@ -47,7 +48,8 @@ class ServerConnection(Connection):
         for i in self.pending_iterators.values():
             i.close()
 
-        self.parent.connections.remove(self)
+        with contextlib.suppress(ValueError):
+            self.parent.connections.remove(self)
 
 
 class Server(object):

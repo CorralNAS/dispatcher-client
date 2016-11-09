@@ -800,6 +800,11 @@ class ServerTransportUnix(ServerTransport):
                             fds.fromstring(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
 
                 except (OSError, ValueError) as err:
+                    if getattr(err, 'errno', None) == errno.EBADF:
+                        # in gevent, shutdown() on a socket from other greenlets results in recv*() returning
+                        # with EBADF.
+                        break
+
                     self.server.logger.info('Receive failed: {0}; closing connection'.format(str(err)), exc_info=True)
                     break
 

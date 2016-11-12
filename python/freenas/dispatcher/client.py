@@ -162,7 +162,7 @@ class Connection(object):
         self.credentials = None
         self.pending_iterators = {}
         self.pending_calls = {}
-        self.default_timeout = 30
+        self.default_timeout = 60
         self.call_queue_limit = None
         self.event_callback = None
         self.error_callback = None

@@ -7,6 +7,7 @@ install_requires = [
     'paramiko',
     'six',
     'ws4py',
+    'wsaccel'
 ]
 
 setup(

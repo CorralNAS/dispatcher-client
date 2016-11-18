@@ -42,6 +42,14 @@ from freenas.utils.spawn_thread import spawn_thread
 from ws4py.client.threadedclient import WebSocketClient
 import struct
 
+# if we have py-wsaccel (accelerator) use it to hotpatch ws4py's
+# utf8validator and stream to be cythonized
+try:
+    import wsaccel
+    wsaccel.patch_ws4py()
+except:
+    # no worries as we can always fallback to the pure Python implementation
+    pass
 
 MAXFDS = 128
 CMSGCRED_SIZE = struct.calcsize('iiiih16i')

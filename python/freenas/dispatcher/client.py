@@ -174,6 +174,9 @@ class StreamingResultView(object):
         return str(self)
 
     def __getitem__(self, item):
+        if self.call.closed:
+            raise RuntimeError('Call is closed')
+
         with self.call.cv:
             if item not in self.call.cache:
                 self.client.call_continue(self.call.id, True, seqno=item-1)
@@ -181,9 +184,13 @@ class StreamingResultView(object):
             return self.call.cache[item-1]
 
     def __contains__(self, item):
-        pass
+        if self.call.closed:
+            raise RuntimeError('Call is closed')
 
     def close(self):
+        if self.call.closed:
+            raise RuntimeError('Call is closed')
+
         self.client.abort_call(self.call.id)
 
 

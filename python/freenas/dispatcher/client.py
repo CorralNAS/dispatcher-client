@@ -84,13 +84,25 @@ def debug_log(message, *args):
 
 
 class PendingIterator(object):
-    def __init__(self, iter):
+    def __init__(self, iter, view=False):
         self.iter = iter
         self.lock = RLock()
         self.seqno = 0
+        self.view = view
+        self.cache = {}
+
+    def request_chunk(self, seqno):
+        if seqno in self.cache:
+            return self.cache[seqno]
+
+        while self.seqno < seqno:
+            ret, _ = self.advance()
+            if self.seqno == seqno:
+                return ret
 
     def advance(self):
-        """ Advances the iterator.
+        """
+        Advances the iterator.
 
         Raises:
             StopIteration
@@ -105,10 +117,14 @@ class PendingIterator(object):
                 raise StopIteration(self.seqno + 1)
 
             self.seqno += 1
+            if self.view:
+                self.cache[self.seqno] = val
+
             return val, self.seqno
 
     def close(self):
-        """ Closes the iterator.
+        """
+        Closes the iterator.
         """
         with self.lock:
             self.iter.close()
@@ -119,6 +135,12 @@ class StreamingResultIterator(object):
         self.client = client
         self.call = call
         self.q = call.queue
+
+    def __str__(self):
+        return "<StreamingResultIterator id '{0}' seqno '{1}'>".format(self.call.id, self.call.seqno)
+
+    def __repr__(self):
+        return str(self)
 
     def __iter__(self):
         return self
@@ -139,18 +161,46 @@ class StreamingResultIterator(object):
         return v
 
 
+class StreamingResultView(object):
+    def __init__(self, client, call):
+        self.client = client
+        self.call = call
+
+    def __str__(self):
+        return "<StreamingResultView id '{0}'>".format(self.call.id)
+
+    def __repr__(self):
+        return str(self)
+
+    def __getitem__(self, item):
+        with self.call.cv:
+            if item not in self.call.cache:
+                self.client.call_continue(self.call.id, True, seqno=item)
+
+            return self.call.cache[item]
+
+    def __contains__(self, item):
+        pass
+
+    def close(self):
+        pass
+
+
 class Connection(object):
     class PendingCall(object):
         def __init__(self, id, method, args=None):
             self.id = id
             self.method = method
             self.args = list(args) if args is not None else None
+            self.closed = False
+            self.view = False
             self.result = None
             self.error = None
             self.ready = Event()
             self.callback = None
             self.queue = Queue()
             self.seqno = 0
+            self.cache = {}
             self.cv = Condition()
 
     def __init__(self):
@@ -243,6 +293,7 @@ class Connection(object):
             payload = {
                 'method': pending_call.method,
                 'args': pending_call.args,
+                'view': pending_call.view
             }
         else:
             payload = custom_payload
@@ -272,8 +323,8 @@ class Connection(object):
 
         self.send('rpc', 'error', id=id, args=payload)
 
-    def send_call(self, id, method, args):
-        self.send('rpc', 'call', id=id, args={'method': method, 'args': args})
+    def send_call(self, id, method, args, view=False):
+        self.send('rpc', 'call', id=id, args={'method': method, 'args': args, 'view': view})
 
     def send_response(self, id, resp):
         self.send('rpc', 'response', id=id, args=resp)
@@ -289,6 +340,9 @@ class Connection(object):
 
     def send_abort(self, id):
         self.send('rpc', 'abort', id=id)
+
+    def send_close(self, id):
+        self.send('rpc', 'close', id=id)
 
     def send(self, *args, **kwargs):
         self.send_raw(*self.pack(*args, **kwargs))
@@ -357,11 +411,17 @@ class Connection(object):
 
         if id in self.pending_calls.keys():
             call = self.pending_calls[id]
-            call.result = StreamingResultIterator(self, call)
+
+            if not call.result:
+                call.result = StreamingResultView(self, call) if call.view else StreamingResultIterator(self, call)
 
             with call.cv:
-                for i in data:
-                    call.queue.put(i)
+                if not call.view:
+                    for i in data:
+                        call.queue.put(i)
+                else:
+                    call.cache[seqno] = data
+
                 call.seqno = seqno
                 call.cv.notify()
                 call.ready.set()
@@ -377,18 +437,29 @@ class Connection(object):
 
             # Create iterator in case it was empty response
             if not call.result:
-                call.result = StreamingResultIterator(self, call)
+                call.result = StreamingResultView(self, call) if call.view else StreamingResultIterator(self, call)
 
             with call.cv:
                 call.seqno = data
-                call.queue.put(None)
+                if not call.view:
+                    call.queue.put(None)
                 call.cv.notify()
 
             if call.callback:
                 call.callback(None)
 
             call.ready.set()
-            del self.pending_calls[str(call.id)]
+
+    def on_rpc_close(self, id, data):
+        self.trace('RPC close: id={0}'.format(id))
+        call = self.pending_calls.get(id)
+
+        if not call:
+            return
+
+        with call.cv:
+            call.closed = True
+            call.cv.notify()
 
     def on_rpc_error(self, id, data):
         if id in self.pending_calls.keys():
@@ -440,25 +511,36 @@ class Connection(object):
                 self.send_error(id, err.code, err.message, err.extra)
             else:
                 if isinstance(result, rpc.RpcStreamingResponse):
-                    self.pending_iterators[id] = PendingIterator(result)
+                    it = PendingIterator(result, args.get('view', False))
+                    self.pending_iterators[id] = it
                     try:
-                        first, seqno = self.pending_iterators[id].advance()
+                        first, seqno = it.advance()
                         self.trace('RPC response fragment: id={0} seqno={1} result={2}'.format(id, seqno, first))
                         self.send_fragment(id, seqno, first)
                     except StopIteration as stp:
                         self.trace('RPC response end: id={0}'.format(id))
                         self.send_end(id, stp.args[0])
-                        del self.pending_iterators[id]
+                        if not it.view:
+                            self.send_close(id)
+                            del self.pending_iterators[id]
+
                         return
                 else:
                     self.trace('RPC response: id={0} result={1}'.format(id, result))
                     self.send_response(id, result)
 
-        self.trace('RPC call: id={0} method={1} args={2}'.format(id, data['method'], data['args']))
+        self.trace('RPC call: id={0} method={1} args={2} view={3}'.format(
+            id,
+            data['method'],
+            data['args'],
+            data.get('view', False)
+        ))
+
         spawn_thread(run_async, id, data, threadpool=True)
 
     def on_rpc_continue(self, id, data):
-        self.trace('RPC continuation: id={0}, seqno={1}'.format(id, data))
+        seqno = data
+        self.trace('RPC continuation: id={0} seqno={1}'.format(id, seqno))
 
         if id not in self.pending_iterators:
             self.trace('RPC pending call {0} not found'.format(id))
@@ -466,14 +548,19 @@ class Connection(object):
             return
 
         def run_async(id):
+            it = self.pending_iterators[id]
             try:
-                fragment, seqno = self.pending_iterators[id].advance()
+                fragment = it.request_chunk(seqno)
                 self.trace('RPC response fragment: id={0} seqno={1} result={2}'.format(id, seqno, fragment))
                 self.send_fragment(id, seqno, fragment)
             except StopIteration as stp:
-                self.trace('RPC response end: id={0} seqno={1}'.format(id, stp.args[0]))
-                self.send_end(id, stp.args[0])
-                del self.pending_iterators[id]
+                self.trace('RPC response end: id={0}'.format(id))
+                self.send_end(id, seqno)
+                if not it.view:
+                    self.send_close(id)
+                    del self.pending_iterators[id]
+
+                return
             except rpc.RpcException as err:
                 self.trace('RPC error: id={0} code={0} message={1} extra={2}'.format(
                     id,
@@ -545,6 +632,7 @@ class Connection(object):
     def call_sync(self, name, *args, **kwargs):
         timeout = kwargs.pop('timeout', self.default_timeout)
         call = self.PendingCall(uuid.uuid4(), name, args)
+        call.view = kwargs.pop('view', False)
         self.pending_calls[str(call.id)] = call
         self.call(call)
 
@@ -559,13 +647,15 @@ class Connection(object):
 
         return call.result
 
-    def call_continue(self, id, sync=False):
+    def call_continue(self, id, sync=False, seqno=None):
         call = self.pending_calls[str(id)]
         with call.cv:
-            seqno = call.seqno + 1
+            if not seqno:
+                seqno = call.seqno + 1
+
             self.send_continue(id, seqno)
             if sync:
-                call.cv.wait_for(lambda: call.seqno == seqno)
+                call.cv.wait_for(lambda: call.seqno == seqno or call.closed)
 
     def enable_server(self, context=None):
         self.rpc = context or rpc.RpcContext()

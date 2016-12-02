@@ -179,9 +179,9 @@ class StreamingResultView(object):
 
         with self.call.cv:
             if item not in self.call.cache:
-                self.client.call_continue(self.call.id, True, seqno=item-1)
+                self.client.call_continue(self.call.id, True, seqno=item+1)
 
-            return self.call.cache[item-1]
+            return self.call.cache[item+1]
 
     def __contains__(self, item):
         if self.call.closed:

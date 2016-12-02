@@ -49,9 +49,10 @@ class ClientError(enum.Enum):
     CONNECTION_CLOSED = 3
     RPC_CALL_TIMEOUT = 4
     RPC_CALL_ERROR = 5
-    SPURIOUS_RPC_RESPONSE = 6
-    LOGOUT = 7
-    OTHER = 8
+    RPC_CALL_CLOSED = 6
+    SPURIOUS_RPC_RESPONSE = 7
+    LOGOUT = 8
+    OTHER = 9
 
 
 _debug_log_file = None
@@ -175,15 +176,15 @@ class StreamingResultView(object):
     def __getitem__(self, item):
         with self.call.cv:
             if item not in self.call.cache:
-                self.client.call_continue(self.call.id, True, seqno=item)
+                self.client.call_continue(self.call.id, True, seqno=item-1)
 
-            return self.call.cache[item]
+            return self.call.cache[item-1]
 
     def __contains__(self, item):
         pass
 
     def close(self):
-        pass
+        self.client.abort_call(self.call.id)
 
 
 class Connection(object):
@@ -588,6 +589,8 @@ class Connection(object):
         except BaseException as err:
             pass
 
+        self.send_close(id)
+
     def login_user(self, username, password, timeout=None, check_password=False, resource=None):
         call = self.PendingCall(uuid.uuid4(), 'auth')
         self.pending_calls[str(call.id)] = call
@@ -656,6 +659,12 @@ class Connection(object):
             self.send_continue(id, seqno)
             if sync:
                 call.cv.wait_for(lambda: call.seqno == seqno or call.closed)
+
+    def abort_call(self, id):
+        call = self.pending_calls[str(id)]
+        with call.cv:
+            self.send_abort(id)
+            call.cv.wait_for(lambda: call.closed)
 
     def enable_server(self, context=None):
         self.rpc = context or rpc.RpcContext()

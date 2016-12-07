@@ -858,7 +858,7 @@ class ServerTransportUnix(ServerTransport):
 
             handler = self.UnixSocketHandler(self, fd, addr)
             handler.conn = server.on_connection(handler)
-            spawn_thread(handler.handle_connection, threadpool=True)
+            spawn_thread(handler.handle_connection)
 
         self.sockfd.close()
 

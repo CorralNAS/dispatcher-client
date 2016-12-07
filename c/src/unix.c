@@ -59,11 +59,14 @@ unix_connect(const char *path)
 		goto fail;
 
 	if (connect(conn->unix_fd, (const struct sockaddr *)&sun,
-	    sizeof(sun)) < 0)
+	    sizeof(sun)) < 0) {
+		close(conn->unix_fd);
 		goto fail;
+	}
 
 	if (pthread_create(&conn->unix_thread, NULL, unix_event_loop, conn)) {
 		shutdown(conn->unix_fd, SHUT_RDWR);
+		close(conn->unix_fd);
 		goto fail;
 	}
 

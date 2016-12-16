@@ -16,7 +16,6 @@ target_link_libraries(dispatcherclient ${JANSSON_LIBRARIES})
 target_link_libraries (dispatcherclient ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(wstest examples/wstest.c)
-target_link_libraries(wstest readline)
 target_link_libraries(wstest dispatcherclient)
 
 add_executable(enum examples/enum.c)

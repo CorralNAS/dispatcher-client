@@ -25,39 +25,43 @@
  *
  */
 
+#define _WITH_GETLINE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <readline/readline.h>
 #include "ws.h"
 
 static void on_message(ws_conn_t *conn, void *msg, size_t len, void *arg)
 {
-    printf("New message received: ");
-    fwrite(msg, len, 1, stdout);
-    printf("\n");
-    fflush(stdout);
+
+	printf("New message received: ");
+	fwrite(msg, len, 1, stdout);
+	printf("\n");
+	fflush(stdout);
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: wstest <uri>\n");
-        return (1);
-    }
+	if (argc < 2) {
+		fprintf(stderr, "Usage: wstest <uri>\n");
+		return (1);
+	}
 
-    ws_conn_t *conn = ws_connect(argv[1]);
-    conn->ws_message_handler = on_message;
+	ws_conn_t *conn = ws_connect(argv[1]);
+	conn->ws_message_handler = on_message;
 
-    while (1) {
-        char *msg = readline(">");
-        if (strlen(msg) == 0)
-            break;
+	while (1) {
+		char *msg = NULL;
+		size_t len = 0;
+		printf("> ");
+		getline(&msg, &len, stdout);
+		if (len == 0)
+			break;
 
-        ws_send_msg(conn, msg, strlen(msg), WS_TEXT);
-        free(msg);
-    }
+		ws_send_msg(conn, msg, len, WS_TEXT);
+		free(msg);
+	}
 
-    ws_close(conn);
-    return (0);
+	ws_close(conn);
+	return (0);
 }

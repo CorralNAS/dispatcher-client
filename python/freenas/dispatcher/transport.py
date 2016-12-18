@@ -816,11 +816,12 @@ class ServerTransportUnix(ServerTransport):
             if self.conn:
                 self.conn.on_close('Bye bye')
                 self.conn = None
-                try:
+
+                with contextlib.suppress(OSError):
                     self.connfd.shutdown(socket.SHUT_RDWR)
+
+                with contextlib.suppress(OSError):
                     self.connfd.close()
-                except OSError:
-                    pass
 
     def __init__(self, scheme, parsed_url, permissions=0o775):
         self.path = parsed_url.path

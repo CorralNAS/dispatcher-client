@@ -241,6 +241,9 @@ class Connection(object):
     def __process_events(self):
         while True:
             name, args = self.event_queue.get()
+            if not name:
+                return
+
             with self.event_distribution_lock:
                 if name in self.event_handlers:
                     for h in self.event_handlers[name]:
@@ -366,7 +369,7 @@ class Connection(object):
         self.event_thread = spawn_thread(self.__process_events)
 
     def on_close(self, reason):
-        self.event_queue.put(StopIteration)
+        self.event_queue.put((None, None))
         self.event_thread.join()
 
     def on_message(self, message, *args, **kwargs):

@@ -37,7 +37,7 @@ from .jsonenc import dumps, loads
 from threading import RLock, Event, Condition
 from queue import Queue
 from freenas.dispatcher import rpc
-from freenas.utils.spawn_thread import spawn_thread
+from freenas.utils.spawn_thread import spawn_thread, kill_thread
 from freenas.dispatcher.transport import ClientTransport
 from freenas.dispatcher.fd import UnixChannelSerializer
 from ws4py.compat import urlsplit
@@ -220,6 +220,8 @@ class Connection(object):
         self.credentials = None
         self.pending_iterators = {}
         self.pending_calls = {}
+        self.requests = {}
+        self.request_lock = RLock()
         self.default_timeout = 60
         self.call_queue_limit = None
         self.event_callback = None
@@ -237,24 +239,21 @@ class Connection(object):
         self.channel_serializer = UnixChannelSerializer()
 
     def __process_events(self):
-        try:
-            while True:
-                name, args = self.event_queue.get()
-                with self.event_distribution_lock:
-                    if name in self.event_handlers:
-                        for h in self.event_handlers[name]:
-                            if getattr(h, 'sync', False):
-                                with h.lock:
-                                    with contextlib.suppress(BaseException):
-                                        h(args)
-                            else:
-                                spawn_thread(h, args, threadpool=True)
+        while True:
+            name, args = self.event_queue.get()
+            with self.event_distribution_lock:
+                if name in self.event_handlers:
+                    for h in self.event_handlers[name]:
+                        if getattr(h, 'sync', False):
+                            with h.lock:
+                                with contextlib.suppress(BaseException):
+                                    h(args)
+                        else:
+                            spawn_thread(h, args, threadpool=True)
 
-                    if self.event_callback:
-                        with contextlib.suppress(BaseException):
-                            self.event_callback(name, args)
-        except:
-            print('__process_events dieded!')
+                if self.event_callback:
+                    with contextlib.suppress(BaseException):
+                        self.event_callback(name, args)
 
     def trace(self, msg):
         pass
@@ -516,7 +515,9 @@ class Connection(object):
                     err.extra
                 ))
 
-                self.send_error(id, err.code, err.message, err.extra)
+                with self.request_lock:
+                    del self.requests[id]
+                    self.send_error(id, err.code, err.message, err.extra)
             else:
                 if isinstance(result, rpc.RpcStreamingResponse):
                     it = PendingIterator(result, args.get('view', False))
@@ -529,13 +530,17 @@ class Connection(object):
                         self.trace('RPC response end: id={0}'.format(id))
                         self.send_end(id, stp.args[0])
                         if not it.view:
-                            self.send_close(id)
-                            del self.pending_iterators[id]
+                            with self.request_lock:
+                                del self.requests[id]
+                                del self.pending_iterators[id]
+                                self.send_close(id)
 
                         return
                 else:
-                    self.trace('RPC response: id={0} result={1}'.format(id, result))
-                    self.send_response(id, result)
+                    with self.request_lock:
+                        del self.requests[id]
+                        self.trace('RPC response: id={0} result={1}'.format(id, result))
+                        self.send_response(id, result)
 
         self.trace('RPC call: id={0} method={1} args={2} view={3}'.format(
             id,
@@ -544,7 +549,8 @@ class Connection(object):
             data.get('view', False)
         ))
 
-        spawn_thread(run_async, id, data, threadpool=True)
+        with self.request_lock:
+            self.requests[id] = spawn_thread(run_async, id, data, threadpool=True)
 
     def on_rpc_continue(self, id, data):
         seqno = data
@@ -584,19 +590,24 @@ class Connection(object):
 
     def on_rpc_abort(self, id, data):
         self.trace('RPC abort: id={0}'.format(id))
+        with self.request_lock:
+            if id not in self.requests:
+                self.trace('RPC pending call {0} not found'.format(id))
+                self.send_error(id, errno.ENOENT, 'Invalid call')
+                return
 
-        if id not in self.pending_iterators:
-            self.trace('RPC pending call {0} not found'.format(id))
-            self.send_error(id, errno.ENOENT, 'Invalid call')
-            return
+            if id in self.pending_iterators:
+                try:
+                    self.pending_iterators[id].close()
+                    del self.pending_iterators[id]
+                except BaseException as err:
+                    pass
 
-        try:
-            self.pending_iterators[id].close()
-            del self.pending_iterators[id]
-        except BaseException as err:
-            pass
-
-        self.send_close(id)
+            try:
+                kill_thread(self.requests[id])
+                del self.requests['id']
+            finally:
+                self.send_close(id)
 
     def login_user(self, username, password, timeout=None, check_password=False, resource=None):
         call = self.PendingCall(uuid.uuid4(), 'auth')
@@ -774,12 +785,24 @@ class Connection(object):
         return handler
 
     def drop_pending_calls(self):
-        message = "Connection closed"
+        for i in self.pending_iterators.values():
+            i.close()
+
+        with self.request_lock:
+            for key, td in self.requests.items():
+                try:
+                    kill_thread(td)
+                    self.trace('Killed outstanding request {0}'.format(key))
+                except BaseException as err:
+                    self.trace('Unkillable request {0}: {1}'.format(key, err))
+
+            self.requests.clear()
+
         for key, call in list(self.pending_calls.items()):
             call.result = None
             call.error = {
                 "code": errno.ECONNABORTED,
-                "message": message
+                "message": "Connection closed"
             }
             call.ready.set()
             del self.pending_calls[key]

@@ -42,11 +42,12 @@ class ServerConnection(Connection):
         if self.parent.channel_serializer:
             self.channel_serializer = self.parent.channel_serializer
 
+        super(ServerConnection, self).on_open()
         self.parent.connections.append(self)
 
     def on_close(self, reason):
-        for i in self.pending_iterators.values():
-            i.close()
+        super(ServerConnection, self).on_close(reason)
+        self.drop_pending_calls()
 
         with contextlib.suppress(ValueError):
             self.parent.connections.remove(self)

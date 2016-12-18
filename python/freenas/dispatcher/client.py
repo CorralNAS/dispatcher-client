@@ -498,7 +498,7 @@ class Connection(object):
             self.send_error(id, errno.EINVAL, 'Malformed request')
             return
 
-        if self.call_queue_limit and len(self.pending_calls) >= self.call_queue_limit:
+        if self.call_queue_limit and len(self.requests) >= self.call_queue_limit:
             self.send_error(id, errno.EBUSY, 'Number of simultaneous requests exceeded')
             return
 

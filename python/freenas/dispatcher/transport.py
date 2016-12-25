@@ -159,6 +159,13 @@ class ServerTransport(object):
         else:
             super(ServerTransport, cls).__new__(cls)
 
+    def __init__(self):
+        self.connections = []
+
+    def broadcast_event(self, event, args):
+        for i in self.connections:
+            i.emit_event(event, args)
+
     def serve_forever(self, server):
         raise NotImplementedError()
 
@@ -513,6 +520,7 @@ class ClientTransportFD(ClientTransport):
                 header = struct.pack('II', 0xdeadbeef, len(message))
                 message = message.encode('utf-8')
                 self.fobj.write(header + message)
+                self.fobj.flush()
             except (OSError, ValueError) as err:
                 debug_log("Send failed: {0}".format(err))
                 self.doclose()
@@ -832,15 +840,11 @@ class ServerTransportUnix(ServerTransport):
                     self.connfd.close()
 
     def __init__(self, scheme, parsed_url, permissions=0o775):
+        super(ServerTransportUnix, self).__init__()
         self.path = parsed_url.path
         self.sockfd = None
         self.permissions = permissions
         self.logger = logging.getLogger('UnixSocketServer')
-        self.connections = []
-
-    def broadcast_event(self, event, args):
-        for i in self.connections:
-            i.emit_event(event, args)
 
     def serve_forever(self, server):
         try:
@@ -873,3 +877,144 @@ class ServerTransportUnix(ServerTransport):
 
     def close(self):
         self.sockfd.shutdown(socket.SHUT_RDWR)
+
+
+@client_transport('tcp')
+@client_transport('tcp6')
+class ClientTransportTCP(ClientTransportFD):
+    def __init__(self, scheme):
+        super(ClientTransportTCP, self).__init__(scheme)
+        self.socket = None
+
+    @property
+    def address(self):
+        return str(self.fd)
+
+    def connect(self, url, parent, **kwargs):
+        self.parent = parent
+        s = None
+
+        for item in socket.getaddrinfo(url.hostname, url.port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP):
+            af, type, proto, canonname, sockaddr = item
+            try:
+                s = socket.socket(af, type, proto)
+                s.connect(sockaddr)
+            except socket.error:
+                continue
+            else:
+                break
+
+        if s is None:
+            raise RuntimeError('Cannot connect to {0}'.format(url.hostname))
+
+        self.fobj = s.makefile('rwb')
+        self.parent.on_open()
+        spawn_thread(self.recv)
+
+
+@server_transport('tcp')
+@server_transport('tcp6')
+class ServerTransportTCP(ServerTransport):
+    class TCPSocketHandler(object):
+        def __init__(self, server, connfd, address):
+            self.connfd = connfd
+            self.address = address
+            self.server = server
+            self.client_address = None
+            self.conn = None
+            self.wlock = RLock()
+
+        def send(self, message, fds=None):
+            with self.wlock:
+                data = message.encode('utf-8')
+                header = struct.pack('II', 0xdeadbeef, len(data))
+                try:
+                    fd = self.connfd.fileno()
+                    if fd == -1:
+                        return
+
+                    r, w, x = select.select([], [fd], [], 10)
+                    if fd not in w:
+                        raise OSError(errno.ETIMEDOUT, 'Operation timed out')
+
+                    xsendmsg(self.connfd, header + data, [])
+                except (OSError, ValueError, socket.timeout) as err:
+                    self.server.logger.info('Send failed: {0}; closing connection'.format(str(err)))
+                    if err.errno not in (errno.EBADF, errno.EPIPE):
+                        self.connfd.shutdown(socket.SHUT_RDWR)
+
+        def handle_connection(self):
+            self.conn.on_open()
+
+            while True:
+                try:
+                    header, _ = xrecvmsg(self.connfd, 8)
+
+                    if header == b'' or len(header) != 8:
+                        if len(header) > 0:
+                            self.server.logger.info('Short read (len {0})'.format(len(header)))
+                        break
+
+                    magic, length = struct.unpack('II', header)
+                    if magic != 0xdeadbeef:
+                        self.server.logger.info('Message with wrong magic dropped (magic {0:x})'.format(magic))
+                        break
+
+                    msg, _ = xrecvmsg(self.connfd, length)
+                    if msg == b'' or len(msg) != length:
+                        self.server.logger.info('Message with wrong length dropped; closing connection')
+                        break
+
+                except (OSError, ValueError) as err:
+                    if getattr(err, 'errno', None) == errno.EBADF:
+                        # in gevent, shutdown() on a socket from other greenlets results in recv*() returning
+                        # with EBADF.
+                        break
+
+                    self.server.logger.info('Receive failed: {0}; closing connection'.format(str(err)), exc_info=True)
+                    break
+
+                self.conn.on_message(msg)
+
+            self.close()
+
+        def close(self):
+            if self.conn:
+                self.conn.on_close('Bye bye')
+                self.conn = None
+
+                with contextlib.suppress(OSError):
+                    self.connfd.shutdown(socket.SHUT_RDWR)
+
+                with contextlib.suppress(OSError):
+                    self.connfd.close()
+
+    def __init__(self, scheme, parsed_url):
+        super(ServerTransportTCP, self).__init__()
+        self.logger = logging.getLogger('TCPTransport')
+        self.af = socket.AF_INET6 if scheme == 'tcp6' else socket.AF_INET
+        self.hostname = parsed_url.hostname
+        self.port = parsed_url.port
+        self.sockfd = None
+
+    def serve_forever(self, server):
+        self.sockfd = socket.socket(self.af, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+        self.sockfd.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sockfd.bind((self.hostname, self.port))
+        self.sockfd.listen(10)
+
+        while True:
+            try:
+                fd, addr = self.sockfd.accept()
+            except OSError as err:
+                if err.errno == errno.ECONNABORTED:
+                    break
+
+                self.logger.error('accept() failed: {0}'.format(str(err)))
+                break
+
+            handler = self.TCPSocketHandler(self, fd, addr)
+            handler.conn = server.on_connection(handler)
+            spawn_thread(handler.handle_connection)
+
+        self.sockfd.close()

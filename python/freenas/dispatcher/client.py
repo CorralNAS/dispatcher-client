@@ -519,8 +519,9 @@ class Connection(object):
                 ))
 
                 with self.request_lock:
-                    del self.requests[id]
-                    self.send_error(id, err.code, err.message, err.extra)
+                    if id in self.requests:
+                        del self.requests[id]
+                        self.send_error(id, err.code, err.message, err.extra)
             else:
                 if isinstance(result, rpc.RpcStreamingResponse):
                     it = PendingIterator(result, args.get('view', False))

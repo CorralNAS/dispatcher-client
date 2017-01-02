@@ -886,6 +886,7 @@ class Client(Connection):
             time.sleep(60)
 
     def on_close(self, reason):
+        super(Client, self).on_close(reason)
         self.drop_pending_calls()
         if self.error_callback is not None and not self.disconnecting:
             self.error_callback(ClientError.CONNECTION_CLOSED)

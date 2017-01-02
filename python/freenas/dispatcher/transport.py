@@ -469,10 +469,13 @@ class ClientTransportSSH(ClientTransport):
             self.closed()
             raise RuntimeError(out)
 
+        self.parent.on_close('Connection terminated')
+
     def close(self):
         debug_log("Transport connection closed by client.")
         self.terminated = True
         self.ssh.close()
+        self.parent.on_close('Going away')
 
     @property
     def address(self):
@@ -708,6 +711,8 @@ class ClientTransportUnix(ClientTransport):
             self.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
             pass
+
+        self.parent.on_close('Going away')
 
     def closed(self):
         with self.close_lock:

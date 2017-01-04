@@ -322,6 +322,13 @@ class Connection(object):
             {'name': name, 'args': params}
         )
 
+    def send_event_burst(self, events):
+        self.send(
+            'events',
+            'event_burst',
+            {'events': events}
+        )
+
     def send_error(self, id, errno, msg, extra=None):
         payload = {
             'code': errno,
@@ -779,6 +786,9 @@ class Connection(object):
 
     def emit_event(self, name, params):
         self.send_event(name, params)
+
+    def emit_events(self, events):
+        self.send_event_burst(events)
 
     def register_event_handler(self, name, handler):
         if name not in self.event_handlers:

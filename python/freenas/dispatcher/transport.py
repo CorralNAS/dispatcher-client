@@ -654,7 +654,8 @@ class ClientTransportUnix(ClientTransport):
                 except (OSError, ValueError) as err:
                     debug_log("Send failed: {0}".format(err))
                     self.connected = False
-                    self.sock.shutdown(socket.SHUT_RDWR)
+                    with contextlib.suppress(OSError):
+                        self.sock.shutdown(socket.SHUT_RDWR)
                 else:
                     debug_log("Sent data: {0}", message)
 

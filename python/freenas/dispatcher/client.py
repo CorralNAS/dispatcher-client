@@ -542,16 +542,18 @@ class Connection(object):
                         self.send_end(id, stp.args[0])
                         if not it.view:
                             with self.request_lock:
-                                del self.requests[id]
-                                del self.pending_iterators[id]
-                                self.send_close(id)
+                                self.pending_iterators.pop(id, None)
+                                if id in self.requests:
+                                    del self.requests[id]
+                                    self.send_close(id)
 
                         return
                 else:
                     with self.request_lock:
-                        del self.requests[id]
-                        self.trace('RPC response: id={0} result={1}'.format(id, result))
-                        self.send_response(id, result)
+                        if id in self.requests:
+                            del self.requests[id]
+                            self.trace('RPC response: id={0} result={1}'.format(id, result))
+                            self.send_response(id, result)
 
         self.trace('RPC call: id={0} method={1} args={2} view={3}'.format(
             id,

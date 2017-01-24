@@ -35,12 +35,12 @@ import select
 import time
 import logging
 import contextlib
+import struct
 from freenas.utils.url import wrap_address
 from threading import RLock, Event
 from freenas.utils import xrecvmsg, xsendmsg
 from freenas.utils.spawn_thread import spawn_thread
 from ws4py.client.threadedclient import WebSocketClient
-import struct
 
 # if we have py-wsaccel (accelerator) use it to hotpatch ws4py's
 # utf8validator and stream to be cythonized

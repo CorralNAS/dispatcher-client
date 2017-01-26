@@ -612,14 +612,12 @@ class ClientTransportUnix(ClientTransport):
                         time.sleep(1)
                         continue
                     else:
-                        self.close()
                         with contextlib.suppress(OSError):
                             self.sock.close()
 
                         debug_log('Socket connection exception: {0}', err)
                     raise
         except KeyboardInterrupt:
-            self.close()
             self.sock.close()
             raise
 

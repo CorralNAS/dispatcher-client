@@ -421,7 +421,7 @@ class ClientTransportSSH(ClientTransport):
         spawn_thread(self.recv)
 
     def send(self, message, fds):
-        if self.terminated is False:
+        if not self.terminated:
             header = struct.pack('II', 0xdeadbeef, len(message))
             message = header + message.encode('utf-8')
             try:
@@ -432,7 +432,7 @@ class ClientTransportSSH(ClientTransport):
                 self.closed()
 
     def recv(self):
-        while self.terminated is False:
+        while not self.terminated:
             header = self.stdout.read(8)
             if header == b'' or len(header) != 8:
                 self.closed()
@@ -588,6 +588,7 @@ class ClientTransportUnix(ClientTransport):
     def connect(self, url, parent, **kwargs):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.parent = parent
+        self.terminated = False
         if not self.parent:
             raise RuntimeError('ClientTransportUnix can be only created inside of a class')
 
@@ -629,7 +630,7 @@ class ClientTransportUnix(ClientTransport):
         return self.path
 
     def send(self, message, fds):
-        if self.terminated is False:
+        if not self.terminated:
             with self.wlock:
                 try:
                     header = struct.pack('II', 0xdeadbeef, len(message))
@@ -658,7 +659,7 @@ class ClientTransportUnix(ClientTransport):
                     debug_log("Sent data: {0}", message)
 
     def recv(self):
-        while self.terminated is False:
+        while not self.terminated:
             try:
                 fds = array.array('i')
                 header, ancdata = xrecvmsg(
@@ -699,7 +700,7 @@ class ClientTransportUnix(ClientTransport):
         with contextlib.suppress(OSError):
             self.sock.close()
 
-        if self.terminated is False:
+        if not self.terminated:
             self.closed()
 
     def close(self):
@@ -715,9 +716,10 @@ class ClientTransportUnix(ClientTransport):
 
     def closed(self):
         with self.close_lock:
-            if self.terminated is False:
+            if not self.terminated:
                 debug_log("Transport socket connection terminated abnormally.")
                 self.terminated = True
+                self.connected = False
                 self.parent.on_close('Going away')
 
     @property

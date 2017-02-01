@@ -801,8 +801,11 @@ class Connection(object):
         return handler
 
     def drop_pending_calls(self):
-        for i in self.pending_iterators.values():
-            i.close()
+        for i in list(self.pending_iterators.values()):
+            try:
+                i.close()
+            except:
+                pass
 
         with self.request_lock:
             for key, td in self.requests.items():

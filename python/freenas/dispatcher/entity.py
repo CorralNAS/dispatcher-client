@@ -25,7 +25,6 @@
 #
 
 import copy
-import contextlib
 from collections import OrderedDict
 from threading import Condition, Event
 from freenas.utils import query as q
@@ -96,6 +95,10 @@ class EntitySubscriber(object):
             return
 
         for i in items:
+            if i['id'] in list(self.items.values()):
+                self.update(i, event)
+                continue
+
             self.items[i['id']] = i
             if event:
                 for cbf in self.on_add:
@@ -253,7 +256,7 @@ class EntitySubscriber(object):
         with self.cv:
             obj = self.query(*filter, remote=True, single=True)
             if obj:
-                self.update(obj)
+                self.__add([obj])
                 self.cv.notify_all()
 
     def wait_ready(self, timeout=None):

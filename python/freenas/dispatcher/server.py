@@ -25,11 +25,22 @@
 #
 #####################################################################
 
+import fnmatch
+import re
 import contextlib
+import threading
 from urllib.parse import urlsplit
 from freenas.dispatcher.rpc import RpcContext
 from freenas.dispatcher.client import Connection
 from freenas.dispatcher.transport import ServerTransport
+
+
+def match_event(name, pat):
+    if isinstance(pat, str):
+        return fnmatch.fnmatch(name, pat)
+
+    if isinstance(pat, re._pattern_type):
+        return pat.match(name) is not None
 
 
 class ServerConnection(Connection):
@@ -37,6 +48,8 @@ class ServerConnection(Connection):
         super(ServerConnection, self).__init__()
         self.parent = parent
         self.streaming = False
+        self.event_masks = set()
+        self.event_subscription_lock = threading.Lock()
 
     def on_open(self):
         if self.parent.channel_serializer:
@@ -51,6 +64,24 @@ class ServerConnection(Connection):
 
         with contextlib.suppress(ValueError):
             self.parent.connections.remove(self)
+
+    def on_events_subscribe(self, id, event_masks):
+        if not isinstance(event_masks, list):
+            return
+
+        with self.event_subscription_lock:
+            self.event_masks = set.union(self.event_masks, set(event_masks))
+
+    def on_events_unsubscribe(self, id, event_masks):
+        if not isinstance(event_masks, list):
+            return
+
+        with self.event_subscription_lock:
+            self.event_masks = set.difference(self.event_masks, set(event_masks))
+
+    def emit_event(self, name, params):
+        if any(match_event(name, i) for i in list(self.event_masks)):
+            super(ServerConnection, self).emit_event(name, params)
 
 
 class Server(object):

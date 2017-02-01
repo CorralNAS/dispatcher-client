@@ -383,11 +383,11 @@ class Connection(object):
         fds = kwargs.pop('fds', [])
         debug_log('-> {0}', str(message))
 
-        if not type(message) is bytes:
-            return
+        if type(message) is bytes:
+            message = message.decode('utf-8')
 
         try:
-            message = loads(message.decode('utf-8'))
+            message = loads(message)
         except ValueError:
             self.send_error(None, errno.EINVAL, 'Request is not valid JSON')
             return

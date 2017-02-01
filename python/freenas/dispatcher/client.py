@@ -282,7 +282,7 @@ class Connection(object):
                 'namespace': namespace,
                 'name': name,
                 'args': args,
-                'id': str(id if id is not None else uuid.uuid4())
+                'id': str(id) if id else None
             })
             return result, fds
         except UnicodeEncodeError:

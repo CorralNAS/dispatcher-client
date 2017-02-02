@@ -131,7 +131,7 @@ class RpcContext(object):
             raise RpcException(errno.EINVAL, "Invalid function path")
 
         try:
-            service_instance = self.services[service]
+            service_instance = self.instances[service]
         except KeyError:
             raise RpcException(errno.ENOENT, "Service {0} not found".format(service))
 

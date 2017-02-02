@@ -245,14 +245,13 @@ class Connection(object):
                 return
 
             with self.event_distribution_lock:
-                if name in self.event_handlers:
-                    for h in self.event_handlers[name]:
-                        if getattr(h, 'sync', False):
-                            with h.lock:
-                                with contextlib.suppress(BaseException):
-                                    h(args)
-                        else:
-                            spawn_thread(h, args, threadpool=True)
+                for h in self.event_handlers.get(name, []):
+                    if getattr(h, 'sync', False):
+                        with h.lock:
+                            with contextlib.suppress(BaseException):
+                                h(args)
+                    else:
+                        spawn_thread(h, args, threadpool=True)
 
                 if self.event_callback:
                     with contextlib.suppress(BaseException):
@@ -408,17 +407,20 @@ class Connection(object):
 
     def on_rpc_response(self, id, data):
         self.trace('RPC response: id={0}, data={1}'.format(id, data))
-        if id in self.pending_calls.keys():
+        try:
             call = self.pending_calls[id]
-            call.result = data
-            call.ready.set()
-            if call.callback is not None:
-                call.callback(data)
-
-            del self.pending_calls[str(call.id)]
-        else:
+        except KeyError:
             if self.error_callback is not None:
                 self.error_callback(ClientError.SPURIOUS_RPC_RESPONSE, id)
+
+            return
+
+        call.result = data
+        call.ready.set()
+        if call.callback is not None:
+            call.callback(data)
+
+        del self.pending_calls[id]
 
     def on_rpc_fragment(self, id, data):
         seqno = data['seqno']
@@ -426,46 +428,56 @@ class Connection(object):
 
         self.trace('RPC fragment: id={0}, seqno={1}, data={2}'.format(id, seqno, data))
 
-        if id in self.pending_calls.keys():
+        try:
             call = self.pending_calls[id]
+        except KeyError:
+            if self.error_callback is not None:
+                self.error_callback(ClientError.SPURIOUS_RPC_RESPONSE, id)
 
-            if not call.result:
-                call.result = StreamingResultView(self, call) if call.view else StreamingResultIterator(self, call)
+            return
 
-            with call.cv:
-                if not call.view:
-                    for i in data:
-                        call.queue.put(i)
-                else:
-                    call.cache[seqno] = data
+        if not call.result:
+            call.result = StreamingResultView(self, call) if call.view else StreamingResultIterator(self, call)
 
-                call.seqno = seqno
-                call.cv.notify()
-                call.ready.set()
+        with call.cv:
+            if not call.view:
+                for i in data:
+                    call.queue.put(i)
+            else:
+                call.cache[seqno] = data
 
-            if call.callback:
-                if call.callback(data):
-                    self.call_continue(id)
+            call.seqno = seqno
+            call.cv.notify()
+            call.ready.set()
+
+        if call.callback:
+            if call.callback(data):
+                self.call_continue(id)
 
     def on_rpc_end(self, id, data):
         self.trace('RPC end: id={0}'.format(id))
-        if id in self.pending_calls.keys():
+        try:
             call = self.pending_calls[id]
+        except KeyError:
+            if self.error_callback is not None:
+                self.error_callback(ClientError.SPURIOUS_RPC_RESPONSE, id)
 
-            # Create iterator in case it was empty response
-            if not call.result:
-                call.result = StreamingResultView(self, call) if call.view else StreamingResultIterator(self, call)
+            return
 
-            with call.cv:
-                call.seqno = data
-                if not call.view:
-                    call.queue.put(None)
-                call.cv.notify()
+        # Create iterator in case it was empty response
+        if not call.result:
+            call.result = StreamingResultView(self, call) if call.view else StreamingResultIterator(self, call)
 
-            if call.callback:
-                call.callback(None)
+        with call.cv:
+            call.seqno = data
+            if not call.view:
+                call.queue.put(None)
+            call.cv.notify()
 
-            call.ready.set()
+        if call.callback:
+            call.callback(None)
+
+        call.ready.set()
 
     def on_rpc_close(self, id, data):
         self.trace('RPC close: id={0}'.format(id))
@@ -479,16 +491,21 @@ class Connection(object):
             call.cv.notify()
 
     def on_rpc_error(self, id, data):
-        if id in self.pending_calls.keys():
+        try:
             call = self.pending_calls[id]
-            call.result = None
-            call.error = data
-            call.ready.set()
-            if call.callback is not None:
-                call.callback(rpc.RpcException(obj=call.error))
+        except KeyError:
+            if self.error_callback is not None:
+                self.error_callback(ClientError.SPURIOUS_RPC_RESPONSE, id)
 
-            del self.pending_calls[str(call.id)]
+            return
 
+        call.result = None
+        call.error = data
+        call.ready.set()
+        if call.callback is not None:
+            call.callback(rpc.RpcException(obj=call.error))
+
+        del self.pending_calls[str(call.id)]
         if self.error_callback is not None:
             self.error_callback(ClientError.RPC_CALL_ERROR)
 

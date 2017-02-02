@@ -83,10 +83,7 @@ class RpcContext(object):
         return RefResolver('', schema, self.schema_definitions)
 
     def get_service(self, name):
-        if name not in self.instances.keys():
-            return None
-
-        return self.instances[name]
+        return self.instances.get(name)
 
     def validate_call(self, args, schema):
         errors = []
@@ -133,11 +130,13 @@ class RpcContext(object):
         if not service:
             raise RpcException(errno.EINVAL, "Invalid function path")
 
-        if service not in self.services.keys():
+        try:
+            service_instance = self.services[service]
+        except KeyError:
             raise RpcException(errno.ENOENT, "Service {0} not found".format(service))
 
         try:
-            func = getattr(self.instances[service], name)
+            func = getattr(service_instance, name)
         except AttributeError:
             raise RpcException(errno.ENOENT, "Method not found")
 

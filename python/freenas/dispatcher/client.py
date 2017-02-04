@@ -420,7 +420,7 @@ class Connection(object):
         if call.callback is not None:
             call.callback(data)
 
-        del self.pending_calls[id]
+        self.pending_calls.pop(id, None)
 
     def on_rpc_fragment(self, id, data):
         seqno = data['seqno']

@@ -447,7 +447,7 @@ class Connection(object):
                 call.cache[seqno] = data
 
             call.seqno = seqno
-            call.cv.notify()
+            call.cv.notify_all()
             call.ready.set()
 
         if call.callback:
@@ -472,7 +472,7 @@ class Connection(object):
             call.seqno = data
             if not call.view:
                 call.queue.put(None)
-            call.cv.notify()
+            call.cv.notify_all()
 
         if call.callback:
             call.callback(None)
@@ -488,7 +488,7 @@ class Connection(object):
 
         with call.cv:
             call.closed = True
-            call.cv.notify()
+            call.cv.notify_all()
 
     def on_rpc_error(self, id, data):
         try:

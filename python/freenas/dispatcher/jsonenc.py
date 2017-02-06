@@ -28,6 +28,7 @@
 import base64
 import uuid
 import re
+from freenas.dispatcher import Password
 from datetime import datetime
 from dateutil.parser import parse
 
@@ -55,6 +56,9 @@ class JsonEncoder(json.JSONEncoder):
         if type(obj) is set:
             return list(obj)
 
+        if type(obj) is Password:
+            return {'$password': obj}
+
         if hasattr(obj, '__getstate__'):
             return obj.__getstate__()
 
@@ -71,6 +75,9 @@ def decode_hook(obj):
 
         if '$regex' in obj:
             return re.compile(obj['$regex'])
+
+        if '$password' in obj:
+            return Password(obj)
 
     return obj
 

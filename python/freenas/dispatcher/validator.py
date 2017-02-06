@@ -31,6 +31,7 @@ from jsonschema import Draft4Validator, FormatChecker
 from jsonschema.validators import create
 from jsonschema.exceptions import ValidationError
 from freenas.utils import first_or_default
+from freenas.dispatcher import Password
 from freenas.dispatcher.fd import FileDescriptor
 
 import six
@@ -73,6 +74,7 @@ def extend_with_default(validator_class):
         all_types.update({
             "fd": FileDescriptor,
             "binary": bytes,
+            "password": Password,
             "datetime": datetime.datetime
         })
 

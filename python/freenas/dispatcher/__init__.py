@@ -59,3 +59,7 @@ class AsyncResult(object):
 
         if self.value:
             return self.value
+
+
+class Password(str):
+    pass

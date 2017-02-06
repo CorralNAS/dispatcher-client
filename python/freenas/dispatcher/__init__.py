@@ -62,4 +62,8 @@ class AsyncResult(object):
 
 
 class Password(str):
-    pass
+    def __str__(self):
+        return '<hidden>'
+
+    def __repr__(self):
+        return str(self)

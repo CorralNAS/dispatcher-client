@@ -61,9 +61,16 @@ class AsyncResult(object):
             return self.value
 
 
-class Password(str):
+class Password(object):
+    def __init__(self, value):
+        self.value = value
+
     def __str__(self):
         return '<hidden>'
 
     def __repr__(self):
         return str(self)
+
+    @property
+    def secret(self):
+        return self.value

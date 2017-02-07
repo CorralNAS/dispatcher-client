@@ -37,7 +37,7 @@ import itertools
 import threading
 import types
 from datetime import datetime
-from freenas.dispatcher import validator
+from freenas.dispatcher import validator, Password
 from freenas.dispatcher.fd import FileDescriptor
 from freenas.utils import iter_chunked, serialize_traceback
 from jsonschema import RefResolver
@@ -488,6 +488,7 @@ class SchemaHelper(object):
 def convert_schema(sch):
     type_mapping = {
         FileDescriptor: 'fd',
+        Password: 'password',
         datetime: 'datetime',
         bytes: 'binary',
         str: 'string',

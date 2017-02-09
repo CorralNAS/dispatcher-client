@@ -57,7 +57,7 @@ class JsonEncoder(json.JSONEncoder):
             return list(obj)
 
         if type(obj) is Password:
-            return {'$password': obj}
+            return {'$password': obj.secret}
 
         if hasattr(obj, '__getstate__'):
             return obj.__getstate__()
@@ -77,7 +77,7 @@ def decode_hook(obj):
             return re.compile(obj['$regex'])
 
         if '$password' in obj:
-            return Password(obj)
+            return Password(obj['$password'])
 
     return obj
 

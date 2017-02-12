@@ -36,6 +36,7 @@ import json
 import itertools
 import threading
 import types
+import typing
 from datetime import datetime
 from freenas.dispatcher import validator, Password
 from freenas.dispatcher.fd import FileDescriptor
@@ -512,6 +513,33 @@ def convert_schema(sch):
 
     if isinstance(sch, tuple):
         return {'type': [type_mapping[i] for i in sch]}
+
+    if hasattr(sch, 'json_schema_name'):
+        return {'$ref': sch.json_schema_name()}
+
+    if type(sch) is type(typing.Iterable):
+        return {
+            'type': 'array',
+            'items': convert_schema(sch.__args__[0])
+        }
+
+    if type(sch) is type(typing.Mapping):
+        assert sch.__args__[0] is str
+        return {
+            'type': 'object',
+            'additionalProperties': convert_schema(sch.__args__[1])
+        }
+
+    if type(sch) is type(typing.Optional):
+        return {
+            'oneOf': [
+                {'type': 'null'},
+                convert_schema(sch.__args__[0])
+            ]
+        }
+
+    if type(sch) is type(typing.Union):
+        return {'oneOf': [convert_schema(a) for a in sch.__args__]}
 
 
 def description(descr):

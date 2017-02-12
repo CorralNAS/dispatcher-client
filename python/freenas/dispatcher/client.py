@@ -850,10 +850,7 @@ class Connection(object):
         done = Event()
         self.subscribe_events(event)
         with self.event_distribution_lock:
-            try:
-                fn()
-            except:
-                raise
+            fn()
 
             def handler(args):
                 if match_fn(args):

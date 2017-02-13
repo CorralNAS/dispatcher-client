@@ -40,7 +40,7 @@ import typing
 from datetime import datetime
 from freenas.dispatcher import validator, Password
 from freenas.dispatcher.fd import FileDescriptor
-from freenas.utils import iter_chunked, serialize_traceback
+from freenas.utils import iter_chunked, serialize_traceback, exclude
 from jsonschema import RefResolver
 
 
@@ -153,6 +153,9 @@ class RpcContext(object):
                     if sender and not sender.user.has_role(i):
                         raise RpcException(errno.EACCES, 'Insufficent privileges')
 
+        if func.__annotations__ and validation:
+            self.validate_call(args, func.__annotations__)
+
         if hasattr(func, 'params_schema') and validation:
             self.validate_call(args, func.params_schema)
 
@@ -230,6 +233,12 @@ class RpcService(object):
             'items': method.params_schema
         }
 
+    def _build_annotations_schema(self, annotations):
+        return {
+            'type': 'array',
+            'items': annotations
+        }
+
     def _build_result_schema(self, method):
         return method.result_schema
 
@@ -260,9 +269,17 @@ class RpcService(object):
                 continue
 
             result = {'name': name, 'private': False}
+            return_annotation = method.__annotations__.get('return')
+            args_annotations = exclude(method.__annotations__, 'return')
 
             if method.__doc__:
                 result['docstring'] = inspect.getdoc(method)
+
+            if return_annotation:
+                result['result-schema'] = convert_schema(return_annotation)
+
+            if args_annotations:
+                result['params-schema'] = self._build_annotations_schema(args_annotations)
 
             if hasattr(method, 'description'):
                 result['description'] = method.description
@@ -496,7 +513,9 @@ def convert_schema(sch):
         int: 'integer',
         float: 'number',
         bool: 'boolean',
-        None: 'null'
+        dict: 'object',
+        None: 'null',
+        type(None): 'null'
     }
 
     if six.PY2:
@@ -508,14 +527,14 @@ def convert_schema(sch):
     if isinstance(sch, dict):
         return sch
 
+    if hasattr(sch, 'json_schema_name'):
+        return {'$ref': sch.json_schema_name()}
+
     if isinstance(sch, (type, type(None))):
         return {'type': type_mapping[sch]}
 
     if isinstance(sch, tuple):
         return {'type': [type_mapping[i] for i in sch]}
-
-    if hasattr(sch, 'json_schema_name'):
-        return {'$ref': sch.json_schema_name()}
 
     if type(sch) is type(typing.Iterable):
         return {

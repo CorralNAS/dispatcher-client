@@ -52,11 +52,15 @@ class RpcContext(object):
         self.logger = logging.getLogger('RpcContext')
         self.services = {}
         self.instances = {}
-        self.schema_definitions = {}
         self.streaming_enabled = False
         self.streaming_burst = 1
         self.strict_validation = False
         self.register_service('discovery', DiscoveryService)
+
+    @property
+    def schema_definitions(self):
+        from freenas.dispatcher.model import context
+        return {s.json_schema_name(): s.to_json_schema() for s in context.json_schema_objects}
 
     def register_service(self, name, clazz):
         self.services[name] = clazz
@@ -75,10 +79,12 @@ class RpcContext(object):
         del self.services[name]
 
     def register_schema_definition(self, name, definition):
-        self.schema_definitions[name] = definition
+        from freenas.dispatcher.model import context
+        context.register_schema(name, definition)
 
     def unregister_schema_definition(self, name):
-        del self.schema_definitions[name]
+        from freenas.dispatcher.model import context
+        context.unregister_schema(name)
 
     def get_schema_resolver(self, schema):
         return RefResolver('', schema, self.schema_definitions)
@@ -526,11 +532,8 @@ def convert_schema(sch):
     if hasattr(sch, 'json_schema_name'):
         return {'$ref': sch.json_schema_name()}
 
-    if isinstance(sch, (type, type(None))):
-        return {'type': type_mapping[sch]}
-
     if isinstance(sch, tuple):
-        return {'type': [type_mapping[i] for i in sch]}
+        return {'type': [convert_schema(i) for i in sch]}
 
     if type(sch) in (type(typing.Iterable), type(typing.List)):
         return {
@@ -558,6 +561,9 @@ def convert_schema(sch):
 
     if type(sch) is type(typing.Union):
         return {'oneOf': [convert_schema(a) for a in sch.__args__]}
+
+    if isinstance(sch, (type, type(None))):
+        return {'type': type_mapping[sch]}
 
 
 def description(descr):

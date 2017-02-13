@@ -26,6 +26,7 @@
 #####################################################################
 
 from freenas.dispatcher.rpc import convert_schema
+from freenas.utils import extend, include
 import enum
 
 
@@ -56,13 +57,24 @@ class BaseStruct(BaseObject):
         return {
             'type': 'object',
             'additionalProperties': False,
-            'properties': {k: convert_schema(v) for k, v in cls.fields()}
+            'properties': {k: convert_schema(v) for k, v in cls.schema_fields()},
         }
 
     @classmethod
-    def fields(cls):
+    def schema_fields(cls):
         yield '%type', {'type': 'string', 'enum': [cls.__name__]}
         yield from cls.__annotations__.items()
+
+    @classmethod
+    def required_fields(cls):
+        if hasattr(cls, '_required_fields'):
+            return cls._required_fields
+
+        return [k for k, v in cls.__annotations__.items() if type(v) is type(Required)]
+
+    @property
+    def fields(self):
+        return list(self.__dict__['_dict'].keys())
 
     def __init_subclass__(cls, *args, **kwargs):
         context.struct_enumerator.structures[cls.__name__] = cls
@@ -77,13 +89,19 @@ class BaseStruct(BaseObject):
         self._dict[key] = value
 
     def __getstate__(self):
-        return self._dict
+        return extend(
+            include(self._dict, *self.__annotations__.keys()),
+            {'%type': self.json_schema_name()}
+        )
 
     def __str__(self):
         return "<Struct '{0}'>".format(self.json_schema_name())
 
     def __repr__(self):
         return str(self)
+
+    def merge(self, other):
+        pass
 
 
 class BaseEnum(BaseObject, enum.Enum):
@@ -129,6 +147,7 @@ class StructEnumerator(object):
     def construct_struct(self, name, schema):
         dct = {
             '__annotations__': schema['properties'],
+            '_required_fields': schema.get('required', []),
             '_schema': schema,
         }
 

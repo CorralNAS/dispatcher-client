@@ -535,7 +535,7 @@ def convert_schema(sch):
     if isinstance(sch, tuple):
         return {'type': [convert_schema(i) for i in sch]}
 
-    if type(sch) in (type(typing.Iterable), type(typing.List)):
+    if type(sch) in (type(typing.Iterable), type(typing.List), type(typing.Set)):
         return {
             'type': 'array',
             'items': convert_schema(sch.__args__[0])

@@ -217,10 +217,6 @@ class RpcContext(object):
         self.instances[service].sender = None
         return result
 
-    def build_schema(self):
-        for name, definition in self.schema_definitions.items():
-            pass
-
 
 class RpcService(object):
     @classmethod
@@ -536,13 +532,13 @@ def convert_schema(sch):
     if isinstance(sch, tuple):
         return {'type': [type_mapping[i] for i in sch]}
 
-    if type(sch) is type(typing.Iterable):
+    if type(sch) in (type(typing.Iterable), type(typing.List)):
         return {
             'type': 'array',
             'items': convert_schema(sch.__args__[0])
         }
 
-    if type(sch) is type(typing.Mapping):
+    if type(sch) in (type(typing.Mapping), type(typing.Dict)):
         assert sch.__args__[0] is str
         return {
             'type': 'object',
@@ -556,6 +552,9 @@ def convert_schema(sch):
                 convert_schema(sch.__args__[0])
             ]
         }
+
+    if type(sch) is type(typing.Any):
+        return {'type': ['string', 'integer', 'number', 'boolean', 'null']}
 
     if type(sch) is type(typing.Union):
         return {'oneOf': [convert_schema(a) for a in sch.__args__]}

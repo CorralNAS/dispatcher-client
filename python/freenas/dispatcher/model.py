@@ -83,7 +83,10 @@ class BaseStruct(BaseObject):
         self.__dict__['_dict'] = values or {}
 
     def __getattr__(self, item):
-        return self._dict[item]
+        try:
+            return self._dict[item]
+        except KeyError:
+            raise AttributeError()
 
     def __setattr__(self, key, value):
         self._dict[key] = value
@@ -93,6 +96,9 @@ class BaseStruct(BaseObject):
             include(self._dict, *self.__annotations__.keys()),
             {'%type': self.json_schema_name()}
         )
+
+    def __setstate__(self, state):
+        self.__dict__['_dict'] = state
 
     def __str__(self):
         return "<Struct '{0}'>".format(self.json_schema_name())

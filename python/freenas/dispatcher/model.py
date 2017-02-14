@@ -183,7 +183,6 @@ class TypeEnumerator(object):
             return key
 
         enum = BaseEnum(name, {escape(k): k for k in schema['enum']})
-        enum['_schema'] = schema
         return enum
 
     def construct_type(self, name, definition):

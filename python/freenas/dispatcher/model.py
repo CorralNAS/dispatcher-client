@@ -39,6 +39,9 @@ class BaseObject(object):
     def json_schema_name(cls):
         return cls.__name__
 
+    def __str__(self):
+        return "<BaseObject '{0}'>".format(self.json_schema_name())
+
 
 class BaseObjectRef(BaseObject):
     @classmethod
@@ -77,10 +80,11 @@ class BaseStruct(BaseObject):
         return list(self.__dict__['_dict'].keys())
 
     def __init_subclass__(cls, *args, **kwargs):
-        context.struct_enumerator.structures[cls.__name__] = cls
+        context.type_enumerator.structures[cls.__name__] = cls
 
-    def __init__(self, values=None):
+    def __init__(self, values=None, **kwargs):
         self.__dict__['_dict'] = values or {}
+        self.__dict__['_dict'].update(kwargs)
 
     def __getattr__(self, item):
         try:
@@ -119,7 +123,7 @@ class BaseEnum(BaseObject, enum.Enum):
         }
 
     def __init_subclass__(cls, *args, **kwargs):
-        context.struct_enumerator.structures[cls.__name__] = cls
+        context.type_enumerator.structures[cls.__name__] = cls
 
 
 class BaseType(BaseObject):
@@ -128,7 +132,7 @@ class BaseType(BaseObject):
         return cls._schema
 
     def __init_subclass__(cls, *args, **kwargs):
-        context.struct_enumerator.structures[cls.__name__] = cls
+        context.type_enumerator.structures[cls.__name__] = cls
 
 
 class BaseVariantType(BaseObject):
@@ -137,12 +141,12 @@ class BaseVariantType(BaseObject):
         return {
             'discriminator': '%type',
             'oneOf': [
-                {'$ref': c.json_schema_name()} for c in context.struct_enumerator.find_by_base(cls.__name__)
+                {'$ref': c.json_schema_name()} for c in context.type_enumerator.find_by_base(cls.__name__)
             ]
         }
 
     def __init_subclass__(cls, *args, **kwargs):
-        context.struct_enumerator.structures[cls.__name__] = cls
+        context.type_enumerator.structures[cls.__name__] = cls
 
 
 class BaseService(BaseObject):
@@ -150,7 +154,7 @@ class BaseService(BaseObject):
         return "<Service '{0}'>".format(self.json_schema_name())
 
 
-class StructEnumerator(object):
+class TypeEnumerator(object):
     def __init__(self, context):
         self.context = context
         self.structures = {}
@@ -178,7 +182,9 @@ class StructEnumerator(object):
 
             return key
 
-        return BaseEnum(name, {escape(k): k for k in schema['enum']})
+        enum = BaseEnum(name, {escape(k): k for k in schema['enum']})
+        enum['_schema'] = schema
+        return enum
 
     def construct_type(self, name, definition):
         return type(name, (BaseType,), {'_schema': definition})
@@ -225,20 +231,20 @@ class ServiceEnumerator(object):
 class Context(object):
     def __init__(self):
         self.service_enumerator = ServiceEnumerator(self)
-        self.struct_enumerator = StructEnumerator(self)
+        self.type_enumerator = TypeEnumerator(self)
 
     def register_schema(self, name, definition):
         if 'enum' in definition:
-            return self.struct_enumerator.construct_enum(name, definition)
+            return self.type_enumerator.construct_enum(name, definition)
 
         elif 'properties' in definition:
-            return self.struct_enumerator.construct_struct(name, definition)
+            return self.type_enumerator.construct_struct(name, definition)
 
         else:
-            self.struct_enumerator.construct_type(name, definition)
+            self.type_enumerator.construct_type(name, definition)
 
     def unregister_schema(self, name):
-        self.struct_enumerator.structures.pop(name, None)
+        self.type_enumerator.structures.pop(name, None)
 
     @property
     def client(self):
@@ -249,14 +255,14 @@ class Context(object):
         return self.service_enumerator
 
     @property
-    def structures(self):
-        return self.struct_enumerator
+    def types(self):
+        return self.type_enumerator
 
     @property
     def json_schema_objects(self):
-        return self.struct_enumerator.structures.values()
+        return self.type_enumerator.structures.values()
 
 
 context = Context()
-structures = context.structures
+types = context.types
 services = context.services

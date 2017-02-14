@@ -122,6 +122,15 @@ class BaseEnum(BaseObject, enum.Enum):
         context.struct_enumerator.structures[cls.__name__] = cls
 
 
+class BaseType(BaseObject):
+    @classmethod
+    def to_json_schema(cls):
+        return cls._schema
+
+    def __init_subclass__(cls, *args, **kwargs):
+        context.struct_enumerator.structures[cls.__name__] = cls
+
+
 class BaseVariantType(BaseObject):
     @classmethod
     def to_json_schema(cls):
@@ -171,6 +180,9 @@ class StructEnumerator(object):
 
         return BaseEnum(name, {escape(k): k for k in schema['enum']})
 
+    def construct_type(self, name, definition):
+        return type(name, (BaseType,), {'_schema': definition})
+
     def find_by_base(self, base):
         for s in self.structures.values():
             variant = getattr(s, '__variant_of__', None)
@@ -219,8 +231,11 @@ class Context(object):
         if 'enum' in definition:
             return self.struct_enumerator.construct_enum(name, definition)
 
-        if 'properties' in definition:
+        elif 'properties' in definition:
             return self.struct_enumerator.construct_struct(name, definition)
+
+        else:
+            self.struct_enumerator.construct_type(name, definition)
 
     def unregister_schema(self, name):
         self.struct_enumerator.structures.pop(name, None)

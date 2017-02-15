@@ -85,6 +85,8 @@ def debug_log(message, *args):
 
 
 class PendingIterator(object):
+    __slots__ = ('iter', 'lock', 'seqno', 'view', 'cache')
+
     def __init__(self, iter, view=False):
         self.iter = iter
         self.lock = RLock()
@@ -132,6 +134,8 @@ class PendingIterator(object):
 
 
 class StreamingResultIterator(object):
+    __slots__ = ('client', 'call', 'q')
+
     def __init__(self, client, call):
         self.client = client
         self.call = call
@@ -163,6 +167,8 @@ class StreamingResultIterator(object):
 
 
 class StreamingResultView(object):
+    __slots__ = ('client', 'call')
+
     def __init__(self, client, call):
         self.client = client
         self.call = call
@@ -196,6 +202,11 @@ class StreamingResultView(object):
 
 class Connection(object):
     class PendingCall(object):
+        __slots__ = (
+            'id', 'method', 'args', 'closed', 'view', 'result', 'error',
+            'ready', 'callback', 'queue', 'seqno', 'cache', 'cv'
+        )
+
         def __init__(self, id, method, args=None):
             self.id = id
             self.method = method

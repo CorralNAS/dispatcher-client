@@ -40,7 +40,7 @@ install_requires = [
 setup(
     name='freenas.dispatcher',
     description='FreeNAS dispatcher client library',
-    packages=['freenas', 'freenas.dispatcher'],
+    packages=['freenas', 'freenas.dispatcher', 'freenas.dispatcher.model'],
     namespace_packages=[str('freenas')],
     license='BSD',
     platforms='any',

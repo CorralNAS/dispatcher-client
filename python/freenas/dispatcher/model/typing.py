@@ -53,10 +53,10 @@ class RangeFactory(object):
         return type(
             'Range[{0}, {1}, {2}]'.format(base_type.__name__, min_value, max_value),
             (BaseObject,), {
-                'to_json_schema': classmethod(to_json_schema),
+                '__json_schema__': classmethod(to_json_schema),
                 'inner': base_type,
                 'min_value': min_value,
-                'max_value': max
+                'max_value': max_value
             }
         )
 
@@ -72,7 +72,7 @@ class PatternFactory(object):
         return type(
             'Pattern["{0}"]'.format(pat),
             (BaseObject,), {
-                'to_json_schema': classmethod(to_json_schema),
+                '__json_schema__': classmethod(to_json_schema),
                 'pattern': pat
             }
         )
@@ -97,7 +97,7 @@ class DefaultFactory(object):
         return type(
             'Default[{0}, {1!r}]'.format(base_type.__name__, default_value),
             (BaseObject,), {
-                'to_json_schema': classmethod(to_json_schema),
+                '__json_schema__': classmethod(to_json_schema),
                 'base_type': base_type,
                 'default_value': default_value
             }

@@ -60,7 +60,7 @@ class RpcContext(object):
     @property
     def schema_definitions(self):
         from freenas.dispatcher.model import context
-        return {s.json_schema_name(): s.to_json_schema() for s in context.json_schema_objects}
+        return dict(s.__named_json_schema__() for s in context.json_schema_objects)
 
     def register_service(self, name, clazz):
         self.services[name] = clazz
@@ -529,8 +529,8 @@ def convert_schema(sch):
     if isinstance(sch, dict):
         return sch
 
-    if hasattr(sch, 'json_schema_name'):
-        return {'$ref': sch.json_schema_name()}
+    if hasattr(sch, '__json_schema__'):
+        return sch.__json_schema__()
 
     if isinstance(sch, tuple):
         return {'type': [convert_schema(i) for i in sch]}

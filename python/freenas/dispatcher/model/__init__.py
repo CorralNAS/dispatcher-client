@@ -69,11 +69,13 @@ class ObjectRef(NamedObject):
 
 
 class BaseStruct(NamedObject):
+    _additional_properties = False
+
     @classmethod
     def __named_json_schema__(cls):
         return cls.__name__, {
             'type': 'object',
-            'additionalProperties': False,
+            'additionalProperties': cls._additional_properties,
             'properties': {k: convert_schema(v) for k, v in cls.schema_fields()},
         }
 
@@ -163,6 +165,7 @@ class TypeEnumerator(object):
         dct = {
             '__annotations__': schema['properties'],
             '_required_fields': schema.get('required', []),
+            '_additional_properties': schema.get('additionalProperties', True),
             '_raw_schema': schema,
         }
 

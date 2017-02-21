@@ -42,7 +42,7 @@ class RangeFactory(object):
             raise ValueError('Range can be used only with int and float types')
 
         def to_json_schema(cls):
-            sch = {'type': convert_schema(cls.inner)}
+            sch = convert_schema(cls.inner)
             if cls.min_value is not None:
                 sch['minimum'] = cls.min_value
             if cls.max_value is not None:

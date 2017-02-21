@@ -28,6 +28,7 @@
 import base64
 import uuid
 import re
+import enum
 from freenas.dispatcher import Password
 from datetime import datetime
 from dateutil.parser import parse
@@ -58,6 +59,9 @@ class JsonEncoder(json.JSONEncoder):
 
         if type(obj) is Password:
             return {'$password': obj.secret}
+
+        if isinstance(obj, enum.Enum):
+            return obj.value
 
         if hasattr(obj, '__getstate__'):
             return obj.__getstate__()

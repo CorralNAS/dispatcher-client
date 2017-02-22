@@ -131,7 +131,6 @@ class BaseEnum(NamedObject, enum.Enum):
     @classmethod
     def __named_json_schema__(cls):
         return cls.__name__, {
-            'type': 'string',
             'enum': [m.value for m in cls.__members__.values()]
         }
 

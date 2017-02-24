@@ -612,8 +612,11 @@ class Connection(object):
                 self.trace('RPC response end: id={0}'.format(id))
                 self.send_end(id, seqno)
                 if not it.view:
-                    self.send_close(id)
-                    del self.pending_iterators[id]
+                    with self.request_lock:
+                        self.pending_iterators.pop(id, None)
+                        if id in self.requests:
+                            del self.requests[id]
+                            self.send_close(id)
 
                 return
             except rpc.RpcException as err:
@@ -624,8 +627,11 @@ class Connection(object):
                     err.extra
                 ))
 
-                self.send_error(id, err.code, err.message, err.extra)
-                del self.pending_iterators[id]
+                with self.request_lock:
+                    self.pending_iterators.pop(id, None)
+                    if id in self.requests:
+                        self.send_error(id, err.code, err.message, err.extra)
+                        del self.requests[id]
 
         spawn_thread(run_async, id, threadpool=True)
 

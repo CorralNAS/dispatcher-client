@@ -69,6 +69,14 @@ class JsonEncoder(json.JSONEncoder):
         return str(obj)
 
 
+class DebugJsonEncoder(JsonEncoder):
+    def default(self, obj):
+        if type(obj) is Password:
+            return str(obj)
+
+        return super(DebugJsonEncoder, self).default(obj)
+
+
 def decode_hook(obj):
     if len(obj) == 1:
         if '$date' in obj:
@@ -95,8 +103,14 @@ def loads(s):
 
 
 def dump(obj, fp, **kwargs):
+    if kwargs.pop('debug', False):
+        return json.dump(obj, fp, cls=DebugJsonEncoder, **kwargs)
+
     return json.dump(obj, fp, cls=JsonEncoder, **kwargs)
 
 
 def dumps(obj, **kwargs):
+    if kwargs.pop('debug', False):
+        return json.dump(obj, cls=DebugJsonEncoder, **kwargs)
+
     return json.dumps(obj, cls=JsonEncoder, **kwargs)

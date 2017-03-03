@@ -111,6 +111,6 @@ def dump(obj, fp, **kwargs):
 
 def dumps(obj, **kwargs):
     if kwargs.pop('debug', False):
-        return json.dump(obj, cls=DebugJsonEncoder, **kwargs)
+        return json.dumps(obj, cls=DebugJsonEncoder, **kwargs)
 
     return json.dumps(obj, cls=JsonEncoder, **kwargs)

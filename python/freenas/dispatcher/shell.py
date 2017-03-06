@@ -72,9 +72,9 @@ class ShellClient(object):
             if callable(self.parent.close_callback):
                 self.parent.close_callback()
 
-    def __init__(self, hostname, token, port=80):
+    def __init__(self, hostname, token, port=80, path='dispatcher/shell'):
         self.hostname = hostname
-        self.path = 'dispatcher/shell'
+        self.path = path
         self.port = port
         self.token = token
         self.connection = None
@@ -111,6 +111,5 @@ class ShellClient(object):
 
 
 class VMConsoleClient(ShellClient):
-    def __init__(self, hostname, token, port=80):
-        super(VMConsoleClient, self).__init__(hostname, token, port)
-        self.path = 'containerd/console'
+    def __init__(self, hostname, token, port=80, path='containerd/console'):
+        super(VMConsoleClient, self).__init__(hostname, token, port, path)

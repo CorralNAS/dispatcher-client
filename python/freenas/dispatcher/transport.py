@@ -762,7 +762,7 @@ class ServerTransportUnix(ServerTransport):
                     if fds:
                         ancdata.append((socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array('i', [i.fd for i in fds])))
 
-                    r, w, x = select.select([], [fd], [], 10)
+                    r, w, x = select.select([], [fd], [], 30)
                     if fd not in w:
                         raise OSError(errno.ETIMEDOUT, 'Operation timed out')
 

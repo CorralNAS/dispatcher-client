@@ -57,6 +57,9 @@ class NamedObject(BaseObject):
         if cls.__name__ in ('ObjectRef', 'BaseStruct', 'BaseVariantType', 'BaseEnum'):
             return
 
+        if ObjectRef in cls.__mro__:
+            return
+
         context.type_enumerator.structures[cls.__name__] = cls
 
     def __str__(self):

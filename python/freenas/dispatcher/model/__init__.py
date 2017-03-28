@@ -82,14 +82,14 @@ class BaseStruct(NamedObject):
     @classmethod
     def schema_fields(cls):
         yield '%type', {'type': 'string', 'enum': [cls.__name__]}
-        yield from cls.__annotations__.items()
+        yield from getattr(cls, '__annotations__', {}).items()
 
     @classmethod
     def required_fields(cls):
         if hasattr(cls, '_required_fields'):
             return cls._required_fields
 
-        return [k for k, v in cls.__annotations__.items() if type(v) is type(Required)]
+        return [k for k, v in getattr(cls, '__annotations__', {}).items() if type(v) is type(Required)]
 
     @property
     def fields(self):
@@ -110,7 +110,7 @@ class BaseStruct(NamedObject):
 
     def __getstate__(self):
         return extend(
-            include(self._dict, *self.__annotations__.keys()),
+            include(self._dict, *getattr(self, '__annotations__', {}).keys()),
             {'%type': self.__class__.__name__}
         )
 

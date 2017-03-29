@@ -166,6 +166,7 @@ class TypeEnumerator(object):
     def construct_struct(self, name, schema):
         dct = {
             '__annotations__': schema['properties'],
+            '_remote': True,
             '_required_fields': schema.get('required', []),
             '_additional_properties': schema.get('additionalProperties', True),
             '_raw_schema': schema,
@@ -262,6 +263,10 @@ class Context(object):
     @property
     def json_schema_objects(self):
         return self.type_enumerator.structures.values()
+
+    @property
+    def local_json_schema_objects(self):
+        return (s for s in self.type_enumerator.structures.values() if not getattr(s, '_remote', False))
 
 
 context = Context()

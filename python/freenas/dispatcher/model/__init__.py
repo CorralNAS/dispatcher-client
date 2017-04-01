@@ -57,6 +57,9 @@ class NamedObject(BaseObject):
         if cls.__name__ in ('ObjectRef', 'BaseStruct', 'BaseVariantType', 'BaseEnum'):
             return
 
+        if ObjectRef in cls.__mro__:
+            return
+
         context.type_enumerator.structures[cls.__name__] = cls
 
     def __str__(self):
@@ -82,14 +85,14 @@ class BaseStruct(NamedObject):
     @classmethod
     def schema_fields(cls):
         yield '%type', {'type': 'string', 'enum': [cls.__name__]}
-        yield from cls.__annotations__.items()
+        yield from getattr(cls, '__annotations__', {}).items()
 
     @classmethod
     def required_fields(cls):
         if hasattr(cls, '_required_fields'):
             return cls._required_fields
 
-        return [k for k, v in cls.__annotations__.items() if type(v) is type(Required)]
+        return [k for k, v in getattr(cls, '__annotations__', {}).items() if type(v) is type(Required)]
 
     @property
     def fields(self):
@@ -110,7 +113,7 @@ class BaseStruct(NamedObject):
 
     def __getstate__(self):
         return extend(
-            include(self._dict, *self.__annotations__.keys()),
+            include(self._dict, *getattr(self, '__annotations__', {}).keys()),
             {'%type': self.__class__.__name__}
         )
 
@@ -163,6 +166,7 @@ class TypeEnumerator(object):
     def construct_struct(self, name, schema):
         dct = {
             '__annotations__': schema['properties'],
+            '_remote': True,
             '_required_fields': schema.get('required', []),
             '_additional_properties': schema.get('additionalProperties', True),
             '_raw_schema': schema,
@@ -259,6 +263,10 @@ class Context(object):
     @property
     def json_schema_objects(self):
         return self.type_enumerator.structures.values()
+
+    @property
+    def local_json_schema_objects(self):
+        return (s for s in self.type_enumerator.structures.values() if not getattr(s, '_remote', False))
 
 
 context = Context()
